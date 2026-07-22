@@ -1,0 +1,385 @@
+{
+  "platform": "linux-auditd",
+  "note": "Seed knowledge base. Detection references are representative of publicly available Sigma logic (SigmaHQ) and should be validated against your deployed ruleset. Telemetry assumes a Linux host with auditd and/or an EDR emitting process/network/file syscall events.",
+  "entries": [
+    {
+      "id": "whoami",
+      "command": "whoami",
+      "description": "System owner / current user discovery",
+      "techniques": [{ "id": "T1033", "name": "System Owner/User Discovery" }],
+      "telemetry": ["execve() of /usr/bin/whoami — auditd type=EXECVE/SYSCALL", "process creation event with parent shell"],
+      "detections": [{ "source": "Sigma", "rule": "Local system reconnaissance utility execution (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 45
+    },
+    {
+      "id": "id",
+      "command": "id",
+      "description": "User and group identity discovery",
+      "techniques": [{ "id": "T1033", "name": "System Owner/User Discovery" }],
+      "telemetry": ["execve() of /usr/bin/id", "process creation event"],
+      "detections": [{ "source": "Sigma", "rule": "Local system reconnaissance utility execution (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 45
+    },
+    {
+      "id": "hostname",
+      "command": "hostname",
+      "description": "Host name discovery",
+      "techniques": [{ "id": "T1082", "name": "System Information Discovery" }],
+      "telemetry": ["execve() of /usr/bin/hostname"],
+      "detections": [{ "source": "Sigma", "rule": "System information discovery utility (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 30
+    },
+    {
+      "id": "uname",
+      "command": "uname",
+      "description": "Kernel / OS version discovery",
+      "techniques": [{ "id": "T1082", "name": "System Information Discovery" }],
+      "telemetry": ["execve() of /usr/bin/uname"],
+      "detections": [{ "source": "Sigma", "rule": "System information discovery utility (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 30
+    },
+    {
+      "id": "os-release",
+      "raw_contains": "/etc/os-release",
+      "description": "OS distribution/version fingerprinting via release files",
+      "techniques": [{ "id": "T1082", "name": "System Information Discovery" }],
+      "telemetry": ["openat()/read() of /etc/os-release — auditd file watch (if configured)"],
+      "detections": [{ "source": "Sigma", "rule": "Read of OS release/version files (file_event_lnx)", "confidence": "low" }],
+      "noise": 30
+    },
+    {
+      "id": "passwd-read",
+      "command": "cat",
+      "args_contains": "/etc/passwd",
+      "description": "Enumeration of local accounts via /etc/passwd",
+      "techniques": [
+        { "id": "T1087.001", "name": "Account Discovery: Local Account" },
+        { "id": "T1003.008", "name": "OS Credential Dumping: /etc/passwd and /etc/shadow" }
+      ],
+      "telemetry": ["openat() of /etc/passwd — auditd file watch", "execve() of cat/less/head/grep against sensitive path"],
+      "detections": [{ "source": "Sigma", "rule": "Read of /etc/passwd by interactive utility (file_event_lnx / proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "shadow-read",
+      "raw_contains": "/etc/shadow",
+      "description": "Access to /etc/shadow — password hash exposure",
+      "techniques": [{ "id": "T1003.008", "name": "OS Credential Dumping: /etc/passwd and /etc/shadow" }],
+      "telemetry": ["openat() of /etc/shadow — high-signal auditd file watch", "read by process not running as auth stack"],
+      "detections": [{ "source": "Sigma", "rule": "Access to /etc/shadow outside auth context (file_event_lnx)", "confidence": "high" }],
+      "noise": 85
+    },
+    {
+      "id": "ps",
+      "command": "ps",
+      "description": "Running process discovery",
+      "techniques": [{ "id": "T1057", "name": "Process Discovery" }],
+      "telemetry": ["execve() of /usr/bin/ps", "reads under /proc/*/stat,cmdline"],
+      "detections": [{ "source": "Sigma", "rule": "Process discovery utility execution (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 35
+    },
+    {
+      "id": "netstat",
+      "command": "netstat",
+      "description": "Network connection discovery",
+      "techniques": [{ "id": "T1049", "name": "System Network Connections Discovery" }],
+      "telemetry": ["execve() of netstat", "reads of /proc/net/*"],
+      "detections": [{ "source": "Sigma", "rule": "Network connection discovery utility (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "ss",
+      "command": "ss",
+      "description": "Socket / network connection discovery",
+      "techniques": [{ "id": "T1049", "name": "System Network Connections Discovery" }],
+      "telemetry": ["execve() of ss", "netlink socket enumeration"],
+      "detections": [{ "source": "Sigma", "rule": "Network connection discovery utility (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "ip-addr",
+      "command": "ip",
+      "args_contains": "addr",
+      "description": "Network interface configuration discovery",
+      "techniques": [{ "id": "T1016", "name": "System Network Configuration Discovery" }],
+      "telemetry": ["execve() of ip", "netlink RTM_GETADDR"],
+      "detections": [{ "source": "Sigma", "rule": "Network configuration discovery utility (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 30
+    },
+    {
+      "id": "ifconfig",
+      "command": "ifconfig",
+      "description": "Network interface configuration discovery",
+      "techniques": [{ "id": "T1016", "name": "System Network Configuration Discovery" }],
+      "telemetry": ["execve() of ifconfig"],
+      "detections": [{ "source": "Sigma", "rule": "Network configuration discovery utility (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 30
+    },
+    {
+      "id": "arp",
+      "command": "arp",
+      "description": "ARP cache enumeration — adjacent host discovery",
+      "techniques": [{ "id": "T1018", "name": "Remote System Discovery" }],
+      "telemetry": ["execve() of arp", "reads of /proc/net/arp"],
+      "detections": [{ "source": "Sigma", "rule": "Remote system discovery utility (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "sudo-l",
+      "command": "sudo",
+      "args_contains": "-l",
+      "description": "Enumeration of the current user's sudo privileges",
+      "techniques": [{ "id": "T1069", "name": "Permission Groups Discovery" }],
+      "telemetry": ["execve() of sudo with -l", "auditd USER_CMD / sudo log entry in /var/log/auth.log"],
+      "detections": [{ "source": "Sigma", "rule": "Sudo privilege enumeration (proc_creation_lnx / auth logs)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "crontab-l",
+      "command": "crontab",
+      "args_contains": "-l",
+      "description": "Scheduled task (cron) discovery",
+      "techniques": [{ "id": "T1053.003", "name": "Scheduled Task/Job: Cron" }],
+      "telemetry": ["execve() of crontab", "reads under /var/spool/cron"],
+      "detections": [{ "source": "Sigma", "rule": "Cron enumeration (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "find-suid",
+      "command": "find",
+      "args_contains": "-perm",
+      "description": "SUID/SGID binary hunting — privilege-escalation recon",
+      "techniques": [
+        { "id": "T1083", "name": "File and Directory Discovery" },
+        { "id": "T1548.001", "name": "Abuse Elevation Control Mechanism: Setuid and Setgid" }
+      ],
+      "telemetry": ["execve() of find with -perm", "large burst of stat()/openat() across the filesystem"],
+      "detections": [{ "source": "Sigma", "rule": "SUID/SGID discovery via find -perm (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "find-generic",
+      "command": "find",
+      "description": "File and directory discovery",
+      "techniques": [{ "id": "T1083", "name": "File and Directory Discovery" }],
+      "telemetry": ["execve() of find", "burst of stat()/openat() syscalls"],
+      "detections": [{ "source": "Sigma", "rule": "Filesystem discovery utility (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 25
+    },
+    {
+      "id": "wget",
+      "command": "wget",
+      "description": "Remote file download — tool ingress",
+      "techniques": [{ "id": "T1105", "name": "Ingress Tool Transfer" }],
+      "telemetry": ["execve() of wget", "outbound connect() to remote host", "file create() in cwd/tmp"],
+      "detections": [{ "source": "Sigma", "rule": "File download via wget (proc_creation_lnx / network)", "confidence": "medium" }],
+      "noise": 60
+    },
+    {
+      "id": "curl",
+      "command": "curl",
+      "description": "Remote file transfer / HTTP client — tool ingress or exfil",
+      "techniques": [{ "id": "T1105", "name": "Ingress Tool Transfer" }],
+      "telemetry": ["execve() of curl", "outbound connect() to remote host"],
+      "detections": [{ "source": "Sigma", "rule": "File transfer via curl (proc_creation_lnx / network)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "pipe-to-shell",
+      "raw_contains": "| bash",
+      "description": "Piping downloaded content directly into a shell interpreter",
+      "techniques": [
+        { "id": "T1059.004", "name": "Command and Scripting Interpreter: Unix Shell" },
+        { "id": "T1105", "name": "Ingress Tool Transfer" }
+      ],
+      "telemetry": ["shell process with network-client parent (curl/wget) in the process tree", "no file written to disk — memory-only execution"],
+      "detections": [{ "source": "Sigma", "rule": "Download piped to shell interpreter (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 80
+    },
+    {
+      "id": "pipe-to-sh",
+      "raw_contains": "| sh",
+      "description": "Piping downloaded content directly into a shell interpreter",
+      "techniques": [
+        { "id": "T1059.004", "name": "Command and Scripting Interpreter: Unix Shell" },
+        { "id": "T1105", "name": "Ingress Tool Transfer" }
+      ],
+      "telemetry": ["shell process with network-client parent in the process tree", "memory-only execution"],
+      "detections": [{ "source": "Sigma", "rule": "Download piped to shell interpreter (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 80
+    },
+    {
+      "id": "netcat",
+      "command": "nc",
+      "description": "Raw TCP/UDP connection — potential C2 or exfil channel",
+      "techniques": [
+        { "id": "T1095", "name": "Non-Application Layer Protocol" },
+        { "id": "T1071", "name": "Application Layer Protocol" }
+      ],
+      "telemetry": ["execve() of nc/ncat", "outbound or listening socket via connect()/bind()/listen()"],
+      "detections": [{ "source": "Sigma", "rule": "Netcat execution / suspicious socket (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 70
+    },
+    {
+      "id": "reverse-shell-devtcp",
+      "raw_contains": "/dev/tcp",
+      "description": "Bash /dev/tcp reverse shell — interactive C2 channel",
+      "techniques": [
+        { "id": "T1059.004", "name": "Command and Scripting Interpreter: Unix Shell" },
+        { "id": "T1071", "name": "Application Layer Protocol" }
+      ],
+      "telemetry": ["bash execve() followed by connect() to attacker IP", "stdin/stdout/stderr duped to a socket fd"],
+      "detections": [{ "source": "Sigma", "rule": "Reverse shell via /dev/tcp redirection (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 82
+    },
+    {
+      "id": "python-c",
+      "command": "python3",
+      "args_contains": "-c",
+      "description": "Inline Python execution — common for one-liner payloads",
+      "techniques": [{ "id": "T1059.006", "name": "Command and Scripting Interpreter: Python" }],
+      "telemetry": ["execve() of python with -c", "child sockets/processes spawned from interpreter"],
+      "detections": [{ "source": "Sigma", "rule": "Inline Python one-liner execution (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "history-clear",
+      "raw_contains": "history -c",
+      "description": "Shell command-history clearing — anti-forensics",
+      "techniques": [{ "id": "T1070.003", "name": "Indicator Removal: Clear Command History" }],
+      "telemetry": ["history builtin (no execve)", "truncate()/write() of ~/.bash_history if flushed"],
+      "detections": [{ "source": "Sigma", "rule": "Command history clearing (proc_creation_lnx / file_event_lnx)", "confidence": "high" }],
+      "noise": 75
+    },
+    {
+      "id": "bash-history-tamper",
+      "raw_contains": ".bash_history",
+      "description": "Direct manipulation/removal of shell history file — anti-forensics",
+      "techniques": [{ "id": "T1070.003", "name": "Indicator Removal: Clear Command History" }],
+      "telemetry": ["unlink()/truncate() of ~/.bash_history — auditd file watch", "redirection of history to /dev/null"],
+      "detections": [{ "source": "Sigma", "rule": "Shell history file tampering (file_event_lnx)", "confidence": "high" }],
+      "noise": 78
+    },
+    {
+      "id": "authorized-keys",
+      "raw_contains": "authorized_keys",
+      "description": "Modification of SSH authorized_keys — persistence / account manipulation",
+      "techniques": [
+        { "id": "T1098.004", "name": "Account Manipulation: SSH Authorized Keys" },
+        { "id": "T1547", "name": "Boot or Logon Autostart Execution" }
+      ],
+      "telemetry": ["write()/create() of ~/.ssh/authorized_keys — auditd file watch", "chmod 600 on the key file"],
+      "detections": [{ "source": "Sigma", "rule": "Modification of authorized_keys (file_event_lnx)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "useradd",
+      "command": "useradd",
+      "description": "Local account creation — persistence",
+      "techniques": [{ "id": "T1136.001", "name": "Create Account: Local Account" }],
+      "telemetry": ["execve() of useradd/adduser", "writes to /etc/passwd,/etc/shadow — auditd file watch"],
+      "detections": [{ "source": "Sigma", "rule": "Local account creation (proc_creation_lnx / file_event_lnx)", "confidence": "high" }],
+      "noise": 70
+    },
+    {
+      "id": "systemd-persistence",
+      "command": "systemctl",
+      "args_contains": "enable",
+      "description": "Enabling a systemd unit — service persistence",
+      "techniques": [{ "id": "T1543.002", "name": "Create or Modify System Process: Systemd Service" }],
+      "telemetry": ["execve() of systemctl enable", "create()/symlink of unit under /etc/systemd/system"],
+      "detections": [{ "source": "Sigma", "rule": "Systemd service persistence (proc_creation_lnx / file_event_lnx)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "selinux-disable",
+      "raw_contains": "setenforce 0",
+      "description": "Disabling SELinux enforcement — defense impairment",
+      "techniques": [{ "id": "T1562.001", "name": "Impair Defenses: Disable or Modify Tools" }],
+      "telemetry": ["execve() of setenforce", "write to /sys/fs/selinux/enforce"],
+      "detections": [{ "source": "Sigma", "rule": "SELinux enforcement disabled (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 75
+    },
+    {
+      "id": "iptables-flush",
+      "command": "iptables",
+      "args_contains": "-F",
+      "description": "Flushing firewall rules — defense impairment",
+      "techniques": [{ "id": "T1562.004", "name": "Impair Defenses: Disable or Modify System Firewall" }],
+      "telemetry": ["execve() of iptables -F", "netfilter table changes"],
+      "detections": [{ "source": "Sigma", "rule": "Firewall rules flushed (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 65
+    },
+    {
+      "id": "chattr-immutable",
+      "command": "chattr",
+      "description": "Setting file attributes (e.g. immutable) — hide artifacts / resist removal",
+      "techniques": [
+        { "id": "T1222.002", "name": "File and Directory Permissions Modification: Linux and Mac" },
+        { "id": "T1564", "name": "Hide Artifacts" }
+      ],
+      "telemetry": ["execve() of chattr", "ioctl(FS_IOC_SETFLAGS)"],
+      "detections": [{ "source": "Sigma", "rule": "chattr immutable/append attribute change (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "chmod-exec",
+      "command": "chmod",
+      "args_contains": "+x",
+      "description": "Making a file executable — staging a dropped payload",
+      "techniques": [{ "id": "T1222.002", "name": "File and Directory Permissions Modification: Linux and Mac" }],
+      "telemetry": ["execve() of chmod", "chmod() syscall setting execute bit"],
+      "detections": [{ "source": "Sigma", "rule": "chmod +x on file in tmp/user dir (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "shred",
+      "command": "shred",
+      "description": "Secure file deletion — anti-forensics",
+      "techniques": [{ "id": "T1070.004", "name": "Indicator Removal: File Deletion" }],
+      "telemetry": ["execve() of shred", "repeated overwrite write() + unlink()"],
+      "detections": [{ "source": "Sigma", "rule": "Secure deletion via shred (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 60
+    },
+    {
+      "id": "tar-archive",
+      "command": "tar",
+      "description": "Archiving data — collection prior to exfiltration",
+      "techniques": [{ "id": "T1560.001", "name": "Archive Collected Data: Archive via Utility" }],
+      "telemetry": ["execve() of tar", "sequential read() across many files"],
+      "detections": [{ "source": "Sigma", "rule": "Bulk archive creation (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 45
+    },
+    {
+      "id": "base64-decode",
+      "command": "base64",
+      "args_contains": "-d",
+      "description": "Base64 decoding — deobfuscation of payloads",
+      "techniques": [{ "id": "T1140", "name": "Deobfuscate/Decode Files or Information" }],
+      "telemetry": ["execve() of base64 with -d", "often chained into a shell interpreter"],
+      "detections": [{ "source": "Sigma", "rule": "Base64 decode chained to execution (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 45
+    },
+    {
+      "id": "scp",
+      "command": "scp",
+      "description": "File transfer over SSH — ingress or exfiltration",
+      "techniques": [
+        { "id": "T1105", "name": "Ingress Tool Transfer" },
+        { "id": "T1048", "name": "Exfiltration Over Alternative Protocol" }
+      ],
+      "telemetry": ["execve() of scp", "outbound SSH connection connect() :22"],
+      "detections": [{ "source": "Sigma", "rule": "File transfer via scp (proc_creation_lnx / network)", "confidence": "low" }],
+      "noise": 45
+    },
+    {
+      "id": "ssh-lateral",
+      "command": "ssh",
+      "description": "Interactive SSH — potential lateral movement",
+      "techniques": [{ "id": "T1021.004", "name": "Remote Services: SSH" }],
+      "telemetry": ["execve() of ssh", "outbound connect() :22", "auth event on the destination host"],
+      "detections": [{ "source": "Sigma", "rule": "Outbound SSH from unusual context (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 45
+    }
+  ]
+}

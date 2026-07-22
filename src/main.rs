@@ -1,0 +1,108 @@
+//! opseclint — a detection-coverage analyzer for Linux/auditd.
+//!
+//! Point it at a command, a script, or a playbook and it statically resolves
+//! each action to the ATT&CK technique(s) it implements, the host telemetry it
+//! emits, and the detections that would fire — with a detectability score.
+//! It answers "what would a defender see?", to help red/purple teams and
+//! detection engineers reason about coverage. It does not recommend evasions.
+
+mod analyzer;
+mod kb;
+mod model;
+mod parser;
+mod report;
+
+use std::io::{IsTerminal, Read};
+use std::process::ExitCode;
+
+use clap::Parser;
+
+/// Detection-coverage analyzer: shell actions -> ATT&CK -> telemetry -> detections.
+#[derive(Parser, Debug)]
+#[command(name = "opseclint", version, about, long_about = None)]
+struct Cli {
+    /// Path to a script or playbook to analyze. Reads stdin if omitted and
+    /// --command is not given.
+    path: Option<String>,
+
+    /// Analyze a single command string instead of a file.
+    #[arg(short, long)]
+    command: Option<String>,
+
+    /// Emit machine-readable JSON instead of a terminal report.
+    #[arg(long)]
+    json: bool,
+
+    /// Only report findings at or above this detectability score (0-100).
+    #[arg(long, default_value_t = 0)]
+    min: u8,
+
+    /// CI gate: exit non-zero if any finding's detectability is >= --threshold.
+    #[arg(long)]
+    ci: bool,
+
+    /// Detectability threshold used by --ci (0-100).
+    #[arg(long, default_value_t = 50)]
+    threshold: u8,
+
+    /// Force-disable ANSI color (color is auto-disabled when not a TTY).
+    #[arg(long)]
+    no_color: bool,
+}
+
+fn read_input(cli: &Cli) -> std::io::Result<String> {
+    if let Some(cmd) = &cli.command {
+        return Ok(cmd.clone());
+    }
+    if let Some(path) = &cli.path {
+        return std::fs::read_to_string(path);
+    }
+    let mut buf = String::new();
+    std::io::stdin().read_to_string(&mut buf)?;
+    Ok(buf)
+}
+
+fn main() -> ExitCode {
+    let cli = Cli::parse();
+
+    let kb = match kb::load() {
+        Ok(kb) => kb,
+        Err(e) => {
+            eprintln!("opseclint: failed to load knowledge base: {e}");
+            return ExitCode::from(2);
+        }
+    };
+
+    let input = match read_input(&cli) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("opseclint: failed to read input: {e}");
+            return ExitCode::from(2);
+        }
+    };
+
+    let mut report = analyzer::analyze(&input, &kb);
+    if cli.min > 0 {
+        report.findings.retain(|f| f.noise >= cli.min);
+    }
+
+    if cli.json {
+        println!("{}", report::render_json(&report));
+    } else {
+        let color = !cli.no_color && std::io::stdout().is_terminal();
+        print!("{}", report::render_human(&report, color));
+    }
+
+    if cli.ci && report.max_noise >= cli.threshold {
+        if !cli.json {
+            eprintln!(
+                "\nopseclint: CI gate failed — loudest action {} (>= threshold {})",
+                report::severity_word(report.max_severity()),
+                cli.threshold
+            );
+        }
+        return ExitCode::from(1);
+    }
+
+    ExitCode::SUCCESS
+}

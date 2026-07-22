@@ -1,0 +1,15 @@
+[package]
+name = "opseclint"
+version = "0.1.0"
+edition = "2024"
+description = "Detection-coverage analyzer for Linux/auditd: resolve shell actions to ATT&CK techniques, the telemetry they emit, and the detections that would fire."
+license = "MIT"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "opseclint"
+path = "src/main.rs"
