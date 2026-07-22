@@ -1,5 +1,7 @@
 # opseclint
 
+[![CI](https://github.com/Gerrrt/opseclint/actions/workflows/ci.yml/badge.svg)](https://github.com/Gerrrt/opseclint/actions/workflows/ci.yml)
+
 **A detection-coverage analyzer for the command line.** Point it at a command,
 a script, or a post-exploitation playbook and it statically resolves each action
 to the [MITRE ATT&CK](https://attack.mitre.org/) technique(s) it implements, the

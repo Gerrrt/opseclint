@@ -22,15 +22,15 @@ pub fn command_entry_matches(entry: &KbEntry, cmd: &Command) -> bool {
     if cmd.program.to_lowercase() != want.to_lowercase() {
         return false;
     }
-    if let Some(sub) = &entry.args_contains {
-        if !cmd.args_joined().contains(&sub.to_lowercase()) {
-            return false;
-        }
+    if let Some(sub) = &entry.args_contains
+        && !cmd.args_joined().contains(&sub.to_lowercase())
+    {
+        return false;
     }
-    if let Some(rc) = &entry.raw_contains {
-        if !cmd.raw.to_lowercase().contains(&rc.to_lowercase()) {
-            return false;
-        }
+    if let Some(rc) = &entry.raw_contains
+        && !cmd.raw.to_lowercase().contains(&rc.to_lowercase())
+    {
+        return false;
     }
     true
 }

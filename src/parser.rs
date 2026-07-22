@@ -26,8 +26,8 @@ impl Command {
 /// Wrapper programs whose presence at the head of a segment should be skipped
 /// to reach the "real" command underneath.
 const WRAPPERS: &[&str] = &[
-    "sudo", "env", "nohup", "time", "command", "exec", "builtin", "doas",
-    "setsid", "stdbuf", "nice", "ionice", "unbuffer",
+    "sudo", "env", "nohup", "time", "command", "exec", "builtin", "doas", "setsid", "stdbuf",
+    "nice", "ionice", "unbuffer",
 ];
 
 /// Tokens that separate one command from the next within a line.
@@ -102,19 +102,14 @@ fn is_assignment(tok: &str) -> bool {
             .next()
             .map(|c| c.is_ascii_alphabetic() || c == '_')
             .unwrap_or(false);
-        return first_ok
-            && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        return first_ok && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
     }
     false
 }
 
 fn basename(program: &str) -> String {
     let trimmed = program.strip_prefix("./").unwrap_or(program);
-    trimmed
-        .rsplit('/')
-        .next()
-        .unwrap_or(trimmed)
-        .to_string()
+    trimmed.rsplit('/').next().unwrap_or(trimmed).to_string()
 }
 
 /// Resolve one segment's tokens into a [`Command`], skipping leading

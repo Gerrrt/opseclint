@@ -83,10 +83,10 @@ impl Severity {
     /// ANSI color code for terminal rendering.
     pub fn color(self) -> &'static str {
         match self {
-            Severity::Low => "\x1b[36m",      // cyan
-            Severity::Medium => "\x1b[33m",   // yellow
+            Severity::Low => "\x1b[36m",        // cyan
+            Severity::Medium => "\x1b[33m",     // yellow
             Severity::High => "\x1b[38;5;208m", // orange
-            Severity::Critical => "\x1b[31m", // red
+            Severity::Critical => "\x1b[31m",   // red
         }
     }
 }
