@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in opseclint behaves incorrectly (crash, wrong output, bad parse)
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! For a *missed* or *spurious* detection, prefer the
+        **Coverage request** template. For security issues, see SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: opseclint version / commit
+      placeholder: "v0.1.0 or a commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Analysis platform (--platform)
+      options:
+        - linux-auditd
+        - windows-sysmon
+        - macos-es
+        - not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command / input
+      description: The exact opseclint invocation and the input analyzed.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected vs. what happened
+    validations:
+      required: true
