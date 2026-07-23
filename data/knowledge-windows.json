@@ -406,6 +406,202 @@
       "telemetry": ["Sysmon EID 1: rundll32.exe", "Sysmon EID 7 (Image Loaded) of the target DLL"],
       "detections": [{ "source": "Sigma", "rule": "Suspicious rundll32 execution (proc_creation_win)", "confidence": "low" }],
       "noise": 50
+    },
+    {
+      "id": "setspn-kerberoast",
+      "command": "setspn",
+      "args_contains": "-q",
+      "description": "SPN enumeration via setspn — Kerberoasting reconnaissance",
+      "techniques": [{ "id": "T1558.003", "name": "Steal or Forge Kerberos Tickets: Kerberoasting" }],
+      "telemetry": ["Sysmon EID 1: setspn.exe -q", "LDAP query for servicePrincipalName to a DC"],
+      "detections": [{ "source": "Sigma", "rule": "SPN enumeration via setspn (proc_creation_win)", "confidence": "medium" }],
+      "noise": 58
+    },
+    {
+      "id": "kerberoast-getuserspns",
+      "raw_contains": "getuserspns",
+      "description": "Kerberoasting via GetUserSPNs (Impacket / PowerView)",
+      "techniques": [{ "id": "T1558.003", "name": "Steal or Forge Kerberos Tickets: Kerberoasting" }],
+      "telemetry": ["Kerberos TGS-REQ for service accounts with RC4 encryption", "Security 4769 (Kerberos service ticket requested)"],
+      "detections": [{ "source": "Sigma", "rule": "Kerberoasting via GetUserSPNs (proc_creation_win / ps_script)", "confidence": "high" }],
+      "noise": 74
+    },
+    {
+      "id": "kerberoast-invoke",
+      "raw_contains": "invoke-kerberoast",
+      "description": "Kerberoasting via Invoke-Kerberoast",
+      "techniques": [{ "id": "T1558.003", "name": "Steal or Forge Kerberos Tickets: Kerberoasting" }],
+      "telemetry": ["PowerShell 4104: Invoke-Kerberoast", "Security 4769 with RC4 ticket encryption"],
+      "detections": [{ "source": "Sigma", "rule": "Invoke-Kerberoast usage (ps_script)", "confidence": "high" }],
+      "noise": 76
+    },
+    {
+      "id": "rubeus",
+      "raw_contains": "rubeus",
+      "description": "Rubeus — Kerberos ticket abuse (roasting, ptt, harvesting)",
+      "techniques": [{ "id": "T1558.003", "name": "Steal or Forge Kerberos Tickets: Kerberoasting" }],
+      "telemetry": ["Sysmon EID 1 / EID 10; anomalous Kerberos ticket requests (4769/4768)"],
+      "detections": [{ "source": "Sigma", "rule": "Rubeus indicators (proc_creation_win)", "confidence": "high" }],
+      "noise": 80
+    },
+    {
+      "id": "asreproast",
+      "raw_contains": "getnpusers",
+      "description": "AS-REP roasting via GetNPUsers (Impacket)",
+      "techniques": [{ "id": "T1558.004", "name": "Steal or Forge Kerberos Tickets: AS-REP Roasting" }],
+      "telemetry": ["Kerberos AS-REQ for accounts without pre-auth", "Security 4768 (TGT requested)"],
+      "detections": [{ "source": "Sigma", "rule": "AS-REP roasting via GetNPUsers (proc_creation_win / ps_script)", "confidence": "high" }],
+      "noise": 74
+    },
+    {
+      "id": "dcsync",
+      "raw_contains": "dcsync",
+      "description": "DCSync — replicating directory secrets from a domain controller",
+      "techniques": [{ "id": "T1003.006", "name": "OS Credential Dumping: DCSync" }],
+      "telemetry": ["Security 4662 with DS-Replication-Get-Changes access from a non-DC", "replication (DRSUAPI) from an unexpected host"],
+      "detections": [{ "source": "Sigma", "rule": "DCSync replication request (proc_creation_win / security)", "confidence": "high" }],
+      "noise": 85
+    },
+    {
+      "id": "golden-ticket",
+      "raw_contains": "kerberos::golden",
+      "description": "Golden/forged Kerberos ticket via mimikatz kerberos::golden",
+      "techniques": [{ "id": "T1558.001", "name": "Steal or Forge Kerberos Tickets: Golden Ticket" }],
+      "telemetry": ["TGTs with anomalous lifetime; 4768/4769 mismatches"],
+      "detections": [{ "source": "Sigma", "rule": "Mimikatz golden ticket indicators (proc_creation_win)", "confidence": "high" }],
+      "noise": 84
+    },
+    {
+      "id": "pass-the-hash",
+      "raw_contains": "sekurlsa::pth",
+      "description": "Pass-the-Hash via mimikatz sekurlsa::pth",
+      "techniques": [{ "id": "T1550.002", "name": "Use Alternate Authentication Material: Pass the Hash" }],
+      "telemetry": ["Security 4624 type 9 (NewCredentials) logon", "Sysmon EID 10 access to lsass.exe"],
+      "detections": [{ "source": "Sigma", "rule": "Pass-the-hash via mimikatz (proc_creation_win)", "confidence": "high" }],
+      "noise": 82
+    },
+    {
+      "id": "lsadump",
+      "raw_contains": "lsadump",
+      "description": "mimikatz lsadump — SAM / LSA secrets extraction",
+      "techniques": [{ "id": "T1003.004", "name": "OS Credential Dumping: LSA Secrets" }],
+      "telemetry": ["Registry access to SECURITY\\Policy\\Secrets", "Sysmon EID 10 to lsass.exe"],
+      "detections": [{ "source": "Sigma", "rule": "mimikatz lsadump indicators (proc_creation_win)", "confidence": "high" }],
+      "noise": 80
+    },
+    {
+      "id": "sharphound",
+      "raw_contains": "sharphound",
+      "description": "BloodHound collection via SharpHound — AD relationship mapping",
+      "techniques": [
+        { "id": "T1087.002", "name": "Account Discovery: Domain Account" },
+        { "id": "T1069.002", "name": "Permission Groups Discovery: Domain Groups" }
+      ],
+      "telemetry": ["heavy LDAP/SAMR enumeration to a DC", "Sysmon EID 3 to LDAP (389/636)"],
+      "detections": [{ "source": "Sigma", "rule": "SharpHound / BloodHound collection (proc_creation_win)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "powerview",
+      "raw_contains": "get-net",
+      "description": "PowerView domain enumeration (Get-Net* / Get-Domain*)",
+      "techniques": [
+        { "id": "T1087.002", "name": "Account Discovery: Domain Account" },
+        { "id": "T1069.002", "name": "Permission Groups Discovery: Domain Groups" }
+      ],
+      "telemetry": ["PowerShell 4104 with PowerView cmdlets", "LDAP queries to a DC"],
+      "detections": [{ "source": "Sigma", "rule": "PowerView domain enumeration (ps_script)", "confidence": "medium" }],
+      "noise": 62
+    },
+    {
+      "id": "adfind",
+      "command": "adfind",
+      "description": "AdFind — Active Directory enumeration",
+      "techniques": [
+        { "id": "T1087.002", "name": "Account Discovery: Domain Account" },
+        { "id": "T1482", "name": "Domain Trust Discovery" }
+      ],
+      "telemetry": ["Sysmon EID 1: adfind.exe", "broad LDAP queries to a DC"],
+      "detections": [{ "source": "Sigma", "rule": "AdFind execution (proc_creation_win)", "confidence": "medium" }],
+      "noise": 64
+    },
+    {
+      "id": "dsquery",
+      "command": "dsquery",
+      "description": "dsquery — directory object enumeration",
+      "techniques": [{ "id": "T1087.002", "name": "Account Discovery: Domain Account" }],
+      "telemetry": ["Sysmon EID 1: dsquery.exe", "LDAP queries to a DC"],
+      "detections": [{ "source": "Sigma", "rule": "dsquery enumeration (proc_creation_win)", "confidence": "low" }],
+      "noise": 52
+    },
+    {
+      "id": "domain-admins-enum",
+      "raw_contains": "domain admins",
+      "description": "Enumerating the Domain Admins group — high-value target discovery",
+      "techniques": [{ "id": "T1069.002", "name": "Permission Groups Discovery: Domain Groups" }],
+      "telemetry": ["Sysmon EID 1: net group \"Domain Admins\" /domain", "LDAP query for the group's members"],
+      "detections": [{ "source": "Sigma", "rule": "Domain Admins enumeration (proc_creation_win)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "klist",
+      "command": "klist",
+      "description": "Kerberos ticket cache listing",
+      "techniques": [{ "id": "T1550.003", "name": "Use Alternate Authentication Material: Pass the Ticket" }],
+      "telemetry": ["Sysmon EID 1: klist.exe"],
+      "detections": [{ "source": "Sigma", "rule": "Kerberos ticket listing via klist (proc_creation_win)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "psexec",
+      "command": "psexec",
+      "description": "PsExec — remote execution over SMB admin shares",
+      "techniques": [
+        { "id": "T1021.002", "name": "Remote Services: SMB/Windows Admin Shares" },
+        { "id": "T1569.002", "name": "System Services: Service Execution" }
+      ],
+      "telemetry": ["Sysmon EID 1: psexec.exe / PSEXESVC service on the target", "Security 7045 (service installed) on target"],
+      "detections": [{ "source": "Sigma", "rule": "PsExec execution (proc_creation_win)", "confidence": "medium" }],
+      "noise": 70
+    },
+    {
+      "id": "impacket-exec",
+      "raw_contains": "wmiexec",
+      "description": "Impacket wmiexec/smbexec-style remote execution",
+      "techniques": [
+        { "id": "T1021.002", "name": "Remote Services: SMB/Windows Admin Shares" },
+        { "id": "T1047", "name": "Windows Management Instrumentation" }
+      ],
+      "telemetry": ["service/WMI-spawned cmd.exe with output redirected to a share (\\\\127.0.0.1\\ADMIN$)"],
+      "detections": [{ "source": "Sigma", "rule": "Impacket lateral movement (proc_creation_win)", "confidence": "high" }],
+      "noise": 74
+    },
+    {
+      "id": "winrm-remoting",
+      "raw_contains": "invoke-command",
+      "description": "PowerShell remoting (Invoke-Command / Enter-PSSession) — lateral movement",
+      "techniques": [{ "id": "T1021.006", "name": "Remote Services: Windows Remote Management" }],
+      "telemetry": ["wsmprovhost.exe on the target", "Sysmon EID 3 to WinRM (5985/5986)"],
+      "detections": [{ "source": "Sigma", "rule": "PowerShell remoting execution (proc_creation_win)", "confidence": "medium" }],
+      "noise": 58
+    },
+    {
+      "id": "gpp-cpassword",
+      "raw_contains": "cpassword",
+      "description": "Reading Group Policy Preferences cPassword — credentials in SYSVOL",
+      "techniques": [{ "id": "T1552.006", "name": "Unsecured Credentials: Group Policy Preferences" }],
+      "telemetry": ["read of Groups.xml under \\\\<domain>\\SYSVOL", "cPassword field access"],
+      "detections": [{ "source": "Sigma", "rule": "GPP cPassword access (proc_creation_win / ps_script)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "runas-netonly",
+      "raw_contains": "/netonly",
+      "description": "runas /netonly — using alternate credentials for network auth",
+      "techniques": [{ "id": "T1078", "name": "Valid Accounts" }],
+      "telemetry": ["Sysmon EID 1: runas.exe /netonly", "Security 4648 (explicit credential logon)"],
+      "detections": [{ "source": "Sigma", "rule": "runas /netonly usage (proc_creation_win)", "confidence": "medium" }],
+      "noise": 55
     }
   ]
 }

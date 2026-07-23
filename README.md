@@ -182,13 +182,13 @@ data change, not a code change.
 ## Status & roadmap
 
 `v0.1` seeds two platforms: **Linux / auditd** (~60 entries) and **Windows /
-Sysmon** (~40 entries), covering the most common post-exploitation actions
-across discovery, credential access, execution, persistence, defense evasion,
-and (Linux) container escape. On the roadmap:
+Sysmon** (~60 entries, including Active Directory tradecraft — Kerberoasting,
+DCSync, ticket attacks, BloodHound/PowerView recon, and lateral movement),
+covering the most common post-exploitation actions across discovery, credential
+access, execution, persistence, defense evasion, and (Linux) container escape.
+On the roadmap:
 
-- Deepen both KBs, especially domain / Active Directory tradecraft on Windows.
-- Cache the parsed Sigma index so large checkouts load faster.
-- macOS / Endpoint Security as a third platform.
+- Deepen the KBs further (macOS coverage, more EDR-specific telemetry).
 
 **Detection references in the seed KB are representative** of publicly available
 Sigma logic and should be validated against your deployed ruleset before you
