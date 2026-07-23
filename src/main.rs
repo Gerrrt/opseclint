@@ -61,9 +61,13 @@ struct Cli {
     no_color: bool,
 
     /// Enrich findings with real rules from a SigmaHQ checkout (directory of
-    /// Sigma YAML). Matched by ATT&CK technique; Linux-relevant rules only.
+    /// Sigma YAML). Matched by ATT&CK technique; platform-relevant rules only.
     #[arg(long, value_name = "DIR")]
     sigma: Option<String>,
+
+    /// Disable the on-disk Sigma index cache (always re-parse the ruleset).
+    #[arg(long)]
+    no_sigma_cache: bool,
 }
 
 fn read_input(cli: &Cli) -> std::io::Result<String> {
@@ -103,13 +107,17 @@ fn main() -> ExitCode {
     }
 
     if let Some(dir) = &cli.sigma {
-        match sigma::SigmaIndex::load_dir(std::path::Path::new(dir), cli.platform.sigma_product()) {
-            Ok(index) => {
+        let product = cli.platform.sigma_product();
+        match sigma::load_cached(std::path::Path::new(dir), product, !cli.no_sigma_cache) {
+            Ok((index, from_cache)) => {
                 let enriched = sigma::enrich(&mut report, &index);
                 if !cli.json && !cli.sarif {
                     eprintln!(
-                        "opseclint: sigma — {} rule(s) from {} file(s); enriched {} finding(s)",
-                        index.rules_indexed, index.files_scanned, enriched
+                        "opseclint: sigma — {} rule(s) from {} file(s){}; enriched {} finding(s)",
+                        index.rules_indexed,
+                        index.files_scanned,
+                        if from_cache { " [cached]" } else { "" },
+                        enriched
                     );
                 }
             }

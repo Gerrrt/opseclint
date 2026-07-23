@@ -81,7 +81,11 @@ opseclint examples/recon.sh --sigma sigma/rules
 ```
 
 The ruleset is read at runtime and never bundled, so the binary stays
-self-contained.
+self-contained. The parsed index is cached to disk (keyed by a fingerprint of
+the ruleset directory), so repeat runs against a large checkout skip re-parsing
+— the report notes `[cached]` on a hit. The cache lives in the system temp dir
+(override with `OPSECLINT_CACHE_DIR`) and invalidates automatically when the
+ruleset changes; `--no-sigma-cache` bypasses it.
 
 ### Platforms
 

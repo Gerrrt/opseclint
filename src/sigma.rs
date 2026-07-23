@@ -10,9 +10,12 @@
 //! self-contained and no detection-rule licensing is redistributed.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::model::{Detection, Report};
 
@@ -36,11 +39,21 @@ struct SigmaRuleRaw {
 }
 
 /// A resolved Sigma rule reference.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SigmaRule {
     pub id: String,
     pub title: String,
     pub level: String,
+}
+
+/// On-disk cache of a parsed ruleset, keyed by a fingerprint of the directory.
+#[derive(Serialize, Deserialize)]
+struct SigmaCache {
+    product: String,
+    fingerprint: u64,
+    files_scanned: usize,
+    rules_indexed: usize,
+    by_technique: HashMap<String, Vec<SigmaRule>>,
 }
 
 /// Technique-id -> matching Sigma rules.
@@ -163,6 +176,120 @@ impl SigmaIndex {
         out.truncate(MAX_RULES_PER_FINDING);
         out
     }
+
+    fn from_cache(cache: SigmaCache) -> SigmaIndex {
+        SigmaIndex {
+            by_technique: cache.by_technique,
+            files_scanned: cache.files_scanned,
+            rules_indexed: cache.rules_indexed,
+        }
+    }
+}
+
+fn is_yaml(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|e| e.to_str()),
+        Some("yml") | Some("yaml")
+    )
+}
+
+/// A cheap fingerprint of the ruleset directory: the sorted set of
+/// (path, size, mtime) over its YAML files, plus the product. Stat-walking the
+/// tree is far cheaper than parsing every rule, so this validates a cache fast.
+fn fingerprint(dir: &Path, product: &str) -> std::io::Result<u64> {
+    let mut items: Vec<(String, u64, u64)> = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(p) = stack.pop() {
+        for entry in std::fs::read_dir(&p)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if !is_yaml(&path) {
+                continue;
+            }
+            let md = entry.metadata()?;
+            let mtime = md
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            items.push((path.to_string_lossy().into_owned(), md.len(), mtime));
+        }
+    }
+    items.sort();
+
+    let mut hasher = DefaultHasher::new();
+    product.hash(&mut hasher);
+    items.len().hash(&mut hasher);
+    for item in &items {
+        item.hash(&mut hasher);
+    }
+    Ok(hasher.finish())
+}
+
+/// Base directory for cache files: `$OPSECLINT_CACHE_DIR` or the system temp dir.
+fn cache_dir() -> PathBuf {
+    std::env::var_os("OPSECLINT_CACHE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+}
+
+fn cache_path(dir: &Path, product: &str) -> PathBuf {
+    let abs = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let mut h = DefaultHasher::new();
+    abs.to_string_lossy().hash(&mut h);
+    product.hash(&mut h);
+    cache_dir().join(format!("opseclint-sigma-{:016x}.json", h.finish()))
+}
+
+/// Load a Sigma index for `dir`/`product`, using an on-disk cache when
+/// `use_cache` is set. Returns `(index, from_cache)`. Cache reads/writes are
+/// best-effort: any cache error falls back to a fresh parse and never fails the
+/// run. The cache is invalidated automatically when the ruleset changes (its
+/// fingerprint no longer matches).
+pub fn load_cached(
+    dir: &Path,
+    product: &str,
+    use_cache: bool,
+) -> std::io::Result<(SigmaIndex, bool)> {
+    let path = use_cache.then(|| cache_path(dir, product));
+    load_with_cache(dir, product, path.as_deref())
+}
+
+fn load_with_cache(
+    dir: &Path,
+    product: &str,
+    cache_path: Option<&Path>,
+) -> std::io::Result<(SigmaIndex, bool)> {
+    let Some(path) = cache_path else {
+        return Ok((SigmaIndex::load_dir(dir, product)?, false));
+    };
+
+    let fp = fingerprint(dir, product)?;
+    if let Ok(content) = std::fs::read_to_string(path)
+        && let Ok(cache) = serde_json::from_str::<SigmaCache>(&content)
+        && cache.product == product
+        && cache.fingerprint == fp
+    {
+        return Ok((SigmaIndex::from_cache(cache), true));
+    }
+
+    let index = SigmaIndex::load_dir(dir, product)?;
+    let cache = SigmaCache {
+        product: product.to_string(),
+        fingerprint: fp,
+        files_scanned: index.files_scanned,
+        rules_indexed: index.rules_indexed,
+        by_technique: index.by_technique.clone(),
+    };
+    if let Ok(json) = serde_json::to_string(&cache) {
+        let _ = std::fs::write(path, json); // best-effort
+    }
+    Ok((index, false))
 }
 
 /// Replace each finding's representative detections with real Sigma rules where
@@ -248,5 +375,51 @@ mod tests {
         // linux-only shadow rule is not.
         assert!(!index.rules_for(&["T1057".to_string()]).is_empty());
         assert!(index.rules_for(&["T1003.008".to_string()]).is_empty());
+    }
+
+    #[test]
+    fn cache_round_trips_and_reports_hit() {
+        // Use an explicit, unique cache file so the test is hermetic.
+        let cache = std::env::temp_dir().join("opseclint-test-cache-round-trip.json");
+        let _ = std::fs::remove_file(&cache);
+
+        let (fresh, from_cache) =
+            load_with_cache(&fixtures(), "linux", Some(&cache)).expect("fresh load");
+        assert!(!from_cache, "first load should parse, not hit cache");
+        assert!(fresh.rules_indexed >= 2);
+        assert!(cache.exists(), "cache file should have been written");
+
+        let (cached, from_cache) =
+            load_with_cache(&fixtures(), "linux", Some(&cache)).expect("cached load");
+        assert!(from_cache, "second load should hit the cache");
+        // Same content served from cache.
+        assert_eq!(cached.rules_indexed, fresh.rules_indexed);
+        assert!(!cached.rules_for(&["T1003.008".to_string()]).is_empty());
+
+        let _ = std::fs::remove_file(&cache);
+    }
+
+    #[test]
+    fn stale_cache_is_rejected_by_fingerprint() {
+        let cache = std::env::temp_dir().join("opseclint-test-cache-stale.json");
+        // A cache with a wrong fingerprint must be ignored (re-parsed).
+        let bogus = SigmaCache {
+            product: "linux".to_string(),
+            fingerprint: 0,
+            files_scanned: 0,
+            rules_indexed: 999,
+            by_technique: HashMap::new(),
+        };
+        std::fs::write(&cache, serde_json::to_string(&bogus).unwrap()).unwrap();
+
+        let (index, from_cache) =
+            load_with_cache(&fixtures(), "linux", Some(&cache)).expect("load");
+        assert!(!from_cache, "fingerprint mismatch must not be a cache hit");
+        assert!(
+            index.rules_indexed >= 2,
+            "should reflect a real parse, not the bogus 999"
+        );
+
+        let _ = std::fs::remove_file(&cache);
     }
 }
