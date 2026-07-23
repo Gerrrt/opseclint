@@ -1,0 +1,269 @@
+{
+  "platform": "macos-es",
+  "note": "Seed knowledge base. Detection references are representative of publicly available Sigma logic (SigmaHQ, product: macos) and should be validated against your deployed ruleset. Telemetry assumes a macOS host with an Endpoint Security (ESF) client and/or the unified log emitting process, file, and network events.",
+  "entries": [
+    {
+      "id": "whoami",
+      "command": "whoami",
+      "description": "Current user discovery",
+      "techniques": [{ "id": "T1033", "name": "System Owner/User Discovery" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of /usr/bin/whoami"],
+      "detections": [{ "source": "Sigma", "rule": "System owner discovery (proc_creation_macos)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "id",
+      "command": "id",
+      "description": "User and group identity discovery",
+      "techniques": [{ "id": "T1033", "name": "System Owner/User Discovery" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of /usr/bin/id"],
+      "detections": [{ "source": "Sigma", "rule": "System owner discovery (proc_creation_macos)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "sw-vers",
+      "command": "sw_vers",
+      "description": "macOS version fingerprinting",
+      "techniques": [{ "id": "T1082", "name": "System Information Discovery" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of /usr/bin/sw_vers"],
+      "detections": [{ "source": "Sigma", "rule": "System information discovery (proc_creation_macos)", "confidence": "low" }],
+      "noise": 30
+    },
+    {
+      "id": "system-profiler",
+      "command": "system_profiler",
+      "description": "Detailed system/hardware inventory",
+      "techniques": [{ "id": "T1082", "name": "System Information Discovery" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of system_profiler"],
+      "detections": [{ "source": "Sigma", "rule": "system_profiler execution (proc_creation_macos)", "confidence": "low" }],
+      "noise": 35
+    },
+    {
+      "id": "networksetup",
+      "command": "networksetup",
+      "description": "Network configuration discovery / modification",
+      "techniques": [{ "id": "T1016", "name": "System Network Configuration Discovery" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of networksetup"],
+      "detections": [{ "source": "Sigma", "rule": "Network configuration discovery (proc_creation_macos)", "confidence": "low" }],
+      "noise": 32
+    },
+    {
+      "id": "mdfind",
+      "command": "mdfind",
+      "description": "Spotlight-backed file search — file and directory discovery",
+      "techniques": [{ "id": "T1083", "name": "File and Directory Discovery" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of mdfind"],
+      "detections": [{ "source": "Sigma", "rule": "Spotlight file discovery (proc_creation_macos)", "confidence": "low" }],
+      "noise": 32
+    },
+    {
+      "id": "dscl-list-users",
+      "command": "dscl",
+      "args_contains": "list /users",
+      "description": "Local account enumeration via dscl",
+      "techniques": [{ "id": "T1087.001", "name": "Account Discovery: Local Account" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of dscl with -list /Users"],
+      "detections": [{ "source": "Sigma", "rule": "Local account discovery via dscl (proc_creation_macos)", "confidence": "medium" }],
+      "noise": 45
+    },
+    {
+      "id": "dscl-create-user",
+      "command": "dscl",
+      "args_contains": "-create",
+      "description": "Local account creation via dscl — persistence",
+      "techniques": [{ "id": "T1136.001", "name": "Create Account: Local Account" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of dscl with -create /Users/..."],
+      "detections": [{ "source": "Sigma", "rule": "Local account creation via dscl (proc_creation_macos)", "confidence": "high" }],
+      "noise": 68
+    },
+    {
+      "id": "dseditgroup-admin",
+      "raw_contains": "dseditgroup",
+      "description": "Group membership modification (e.g. adding to admin) via dseditgroup",
+      "techniques": [{ "id": "T1098", "name": "Account Manipulation" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of dseditgroup -o edit -a <user> admin"],
+      "detections": [{ "source": "Sigma", "rule": "Admin group modification via dseditgroup (proc_creation_macos)", "confidence": "high" }],
+      "noise": 64
+    },
+    {
+      "id": "launch-agent-persist",
+      "raw_contains": "launchagents",
+      "description": "Writing a LaunchAgent plist — user logon persistence",
+      "techniques": [{ "id": "T1543.001", "name": "Create or Modify System Process: Launch Agent" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_CREATE of ~/Library/LaunchAgents/*.plist"],
+      "detections": [{ "source": "Sigma", "rule": "LaunchAgent persistence (file_event_macos)", "confidence": "high" }],
+      "noise": 66
+    },
+    {
+      "id": "launch-daemon-persist",
+      "raw_contains": "launchdaemons",
+      "description": "Writing a LaunchDaemon plist — system-wide persistence",
+      "techniques": [{ "id": "T1543.004", "name": "Create or Modify System Process: Launch Daemon" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_CREATE of /Library/LaunchDaemons/*.plist"],
+      "detections": [{ "source": "Sigma", "rule": "LaunchDaemon persistence (file_event_macos)", "confidence": "high" }],
+      "noise": 70
+    },
+    {
+      "id": "launchctl-load",
+      "command": "launchctl",
+      "args_contains": "load",
+      "description": "Loading a launchd job — persistence / execution",
+      "techniques": [
+        { "id": "T1543.001", "name": "Create or Modify System Process: Launch Agent" },
+        { "id": "T1569.001", "name": "System Services: Launchctl" }
+      ],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of launchctl load"],
+      "detections": [{ "source": "Sigma", "rule": "launchctl job load (proc_creation_macos)", "confidence": "medium" }],
+      "noise": 52
+    },
+    {
+      "id": "login-items-persist",
+      "raw_contains": "loginitems",
+      "description": "Adding a Login Item — logon persistence",
+      "techniques": [{ "id": "T1547.015", "name": "Boot or Logon Autostart Execution: Login Items" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of osascript/defaults modifying Login Items"],
+      "detections": [{ "source": "Sigma", "rule": "Login item persistence (proc_creation_macos)", "confidence": "medium" }],
+      "noise": 58
+    },
+    {
+      "id": "keychain-dump",
+      "command": "security",
+      "args_contains": "dump-keychain",
+      "description": "Dumping the login keychain — credential access",
+      "techniques": [{ "id": "T1555.001", "name": "Credentials from Password Stores: Keychain" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of /usr/bin/security dump-keychain", "ESF open of ~/Library/Keychains/login.keychain-db"],
+      "detections": [{ "source": "Sigma", "rule": "Keychain dump via security (proc_creation_macos)", "confidence": "high" }],
+      "noise": 78
+    },
+    {
+      "id": "keychain-find",
+      "raw_contains": "find-generic-password",
+      "description": "Extracting a stored secret via security find-*-password",
+      "techniques": [{ "id": "T1555.001", "name": "Credentials from Password Stores: Keychain" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of security find-generic-password -w"],
+      "detections": [{ "source": "Sigma", "rule": "Keychain secret extraction (proc_creation_macos)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "osascript",
+      "command": "osascript",
+      "args_contains": "-e",
+      "description": "Inline AppleScript execution",
+      "techniques": [{ "id": "T1059.002", "name": "Command and Scripting Interpreter: AppleScript" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of osascript -e"],
+      "detections": [{ "source": "Sigma", "rule": "Inline AppleScript execution (proc_creation_macos)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "osascript-shell",
+      "raw_contains": "do shell script",
+      "description": "AppleScript spawning a shell (do shell script) — often privilege prompt abuse",
+      "techniques": [{ "id": "T1059.002", "name": "Command and Scripting Interpreter: AppleScript" }],
+      "telemetry": ["osascript spawning /bin/sh as a child process (ESF EXEC chain)"],
+      "detections": [{ "source": "Sigma", "rule": "AppleScript do shell script (proc_creation_macos)", "confidence": "high" }],
+      "noise": 66
+    },
+    {
+      "id": "gatekeeper-disable",
+      "raw_contains": "--master-disable",
+      "description": "Disabling Gatekeeper via spctl --master-disable — defense evasion",
+      "techniques": [{ "id": "T1553.001", "name": "Subvert Trust Controls: Gatekeeper Bypass" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of spctl --master-disable"],
+      "detections": [{ "source": "Sigma", "rule": "Gatekeeper disabled via spctl (proc_creation_macos)", "confidence": "high" }],
+      "noise": 74
+    },
+    {
+      "id": "quarantine-removal",
+      "raw_contains": "com.apple.quarantine",
+      "description": "Removing the quarantine attribute — Gatekeeper bypass",
+      "techniques": [{ "id": "T1553.001", "name": "Subvert Trust Controls: Gatekeeper Bypass" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_SETEXTATTR / xattr -d com.apple.quarantine"],
+      "detections": [{ "source": "Sigma", "rule": "Quarantine attribute removal (proc_creation_macos)", "confidence": "medium" }],
+      "noise": 60
+    },
+    {
+      "id": "sip-disable",
+      "raw_contains": "csrutil disable",
+      "description": "Disabling System Integrity Protection — defense evasion",
+      "techniques": [{ "id": "T1562.001", "name": "Impair Defenses: Disable or Modify Tools" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of csrutil disable (recovery context)"],
+      "detections": [{ "source": "Sigma", "rule": "SIP disabled via csrutil (proc_creation_macos)", "confidence": "high" }],
+      "noise": 78
+    },
+    {
+      "id": "tcc-tamper",
+      "raw_contains": "tcc.db",
+      "description": "Direct access to the TCC database — privacy/permission control bypass",
+      "techniques": [{ "id": "T1548.006", "name": "Abuse Elevation Control Mechanism: TCC Manipulation" }],
+      "telemetry": ["ESF open/write of TCC.db under ~/Library/Application Support/com.apple.TCC"],
+      "detections": [{ "source": "Sigma", "rule": "TCC database manipulation (file_event_macos)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "kextload",
+      "command": "kextload",
+      "description": "Loading a kernel extension — potential rootkit / persistence",
+      "techniques": [{ "id": "T1547.006", "name": "Boot or Logon Autostart Execution: Kernel Modules and Extensions" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of kextload / ES_EVENT_TYPE_NOTIFY_KEXTLOAD"],
+      "detections": [{ "source": "Sigma", "rule": "Kernel extension load (proc_creation_macos)", "confidence": "medium" }],
+      "noise": 62
+    },
+    {
+      "id": "screencapture",
+      "command": "screencapture",
+      "description": "Screen capture — collection",
+      "techniques": [{ "id": "T1113", "name": "Screen Capture" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of screencapture"],
+      "detections": [{ "source": "Sigma", "rule": "Screen capture via screencapture (proc_creation_macos)", "confidence": "medium" }],
+      "noise": 52
+    },
+    {
+      "id": "clipboard-capture",
+      "command": "pbpaste",
+      "description": "Reading the clipboard — collection",
+      "techniques": [{ "id": "T1115", "name": "Clipboard Data" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of pbpaste"],
+      "detections": [{ "source": "Sigma", "rule": "Clipboard read via pbpaste (proc_creation_macos)", "confidence": "low" }],
+      "noise": 45
+    },
+    {
+      "id": "curl",
+      "command": "curl",
+      "description": "Remote file transfer / HTTP client — tool ingress or exfil",
+      "techniques": [{ "id": "T1105", "name": "Ingress Tool Transfer" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of curl", "outbound network connection"],
+      "detections": [{ "source": "Sigma", "rule": "File transfer via curl (proc_creation_macos)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "reverse-shell-devtcp",
+      "raw_contains": "/dev/tcp",
+      "description": "Bash /dev/tcp reverse shell — interactive C2 channel",
+      "techniques": [
+        { "id": "T1059.004", "name": "Command and Scripting Interpreter: Unix Shell" },
+        { "id": "T1071", "name": "Application Layer Protocol" }
+      ],
+      "telemetry": ["ESF EXEC of bash followed by an outbound connection to the attacker"],
+      "detections": [{ "source": "Sigma", "rule": "Reverse shell via /dev/tcp (proc_creation_macos)", "confidence": "high" }],
+      "noise": 80
+    },
+    {
+      "id": "history-clear",
+      "raw_contains": "history -c",
+      "description": "Shell command-history clearing — anti-forensics",
+      "techniques": [{ "id": "T1070.003", "name": "Indicator Removal: Clear Command History" }],
+      "telemetry": ["truncate/write of ~/.zsh_history or ~/.bash_history"],
+      "detections": [{ "source": "Sigma", "rule": "Command history clearing (proc_creation_macos)", "confidence": "medium" }],
+      "noise": 70
+    },
+    {
+      "id": "unified-log-erase",
+      "raw_contains": "log erase",
+      "description": "Erasing the unified log — anti-forensics",
+      "techniques": [{ "id": "T1070.002", "name": "Indicator Removal: Clear Linux or Mac System Logs" }],
+      "telemetry": ["ES_EVENT_TYPE_NOTIFY_EXEC of /usr/bin/log erase"],
+      "detections": [{ "source": "Sigma", "rule": "Unified log erase (proc_creation_macos)", "confidence": "high" }],
+      "noise": 72
+    }
+  ]
+}

@@ -1,5 +1,5 @@
-//! opseclint — a detection-coverage analyzer for Linux/auditd and
-//! Windows/Sysmon.
+//! opseclint — a detection-coverage analyzer for Linux/auditd,
+//! Windows/Sysmon, and macOS/Endpoint Security.
 //!
 //! Point it at a command, a script, or a playbook and it statically resolves
 //! each action to the ATT&CK technique(s) it implements, the host telemetry it

@@ -89,6 +89,25 @@ mod tests {
         kb::load(kb::Platform::WindowsSysmon).expect("windows KB must parse")
     }
 
+    fn mac_kb() -> KnowledgeBase {
+        kb::load(kb::Platform::MacosEs).expect("macos KB must parse")
+    }
+
+    #[test]
+    fn macos_kb_detects_keychain_and_gatekeeper() {
+        let report = analyze("security dump-keychain -d login.keychain", &mac_kb());
+        assert_eq!(report.platform, "macos-es");
+        assert!(report.findings.iter().any(|f| f.rule_id == "keychain-dump"));
+
+        let gk = analyze("sudo spctl --master-disable", &mac_kb());
+        let f = gk
+            .findings
+            .iter()
+            .find(|f| f.rule_id == "gatekeeper-disable")
+            .unwrap();
+        assert_eq!(f.techniques[0].id, "T1553.001");
+    }
+
     #[test]
     fn windows_kb_detects_lolbin_and_normalizes_exe_path() {
         // .exe extension and a full Windows path must still resolve to certutil.
