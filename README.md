@@ -61,8 +61,26 @@ cat playbook.sh | opseclint         # read from stdin
 opseclint script.sh --min 50        # only show findings >= detectability 50
 opseclint script.sh --json          # machine-readable output
 opseclint script.sh --sarif         # SARIF 2.1.0 (GitHub code scanning)
+opseclint script.sh --sigma ./sigma # enrich with a real SigmaHQ checkout
 opseclint script.sh --ci --threshold 70   # exit 1 if loudest action >= 70
 ```
+
+### Real Sigma rules
+
+By default, detection references in the seed KB are *representative*. Point
+`--sigma` at a checkout of [SigmaHQ/sigma](https://github.com/SigmaHQ/sigma)
+(or any directory of Sigma YAML) and opseclint indexes every rule by its ATT&CK
+technique tag, then replaces each finding's references with the **genuine rule
+titles and UUIDs** that match — Linux-relevant rules only.
+
+```bash
+git clone --depth 1 https://github.com/SigmaHQ/sigma
+opseclint examples/recon.sh --sigma sigma/rules
+# detection  Sigma: Access To Sudoers File (2c9d1141-... ) (high confidence)
+```
+
+The ruleset is read at runtime and never bundled, so the binary stays
+self-contained.
 
 ### GitHub code scanning
 
@@ -135,9 +153,8 @@ data change, not a code change.
 actions across discovery, credential access, execution, persistence, defense
 evasion, and container escape. On the roadmap:
 
-- Broaden the Linux KB and add a Windows/Sysmon platform.
-- Load rules directly from a SigmaHQ checkout to attach real rule IDs.
-- Richer parsing (command substitution, here-docs, multi-line constructs).
+- Broaden the KB further and add a Windows/Sysmon platform.
+- Cache the parsed Sigma index so large checkouts load faster.
 
 **Detection references in the seed KB are representative** of publicly available
 Sigma logic and should be validated against your deployed ruleset before you

@@ -12,6 +12,7 @@ mod model;
 mod parser;
 mod report;
 mod sarif;
+mod sigma;
 
 use std::io::{IsTerminal, Read};
 use std::process::ExitCode;
@@ -53,6 +54,11 @@ struct Cli {
     /// Force-disable ANSI color (color is auto-disabled when not a TTY).
     #[arg(long)]
     no_color: bool,
+
+    /// Enrich findings with real rules from a SigmaHQ checkout (directory of
+    /// Sigma YAML). Matched by ATT&CK technique; Linux-relevant rules only.
+    #[arg(long, value_name = "DIR")]
+    sigma: Option<String>,
 }
 
 fn read_input(cli: &Cli) -> std::io::Result<String> {
@@ -89,6 +95,25 @@ fn main() -> ExitCode {
     let mut report = analyzer::analyze(&input, &kb);
     if cli.min > 0 {
         report.findings.retain(|f| f.noise >= cli.min);
+    }
+
+    if let Some(dir) = &cli.sigma {
+        match sigma::SigmaIndex::load_dir(std::path::Path::new(dir)) {
+            Ok(index) => {
+                let enriched = sigma::enrich(&mut report, &index);
+                if !cli.json && !cli.sarif {
+                    eprintln!(
+                        "opseclint: sigma — {} rule(s) from {} file(s); enriched {} finding(s)",
+                        index.rules_indexed, index.files_scanned, enriched
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "opseclint: could not read sigma dir '{dir}': {e} (using seed references)"
+                );
+            }
+        }
     }
 
     if cli.sarif {
