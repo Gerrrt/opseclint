@@ -54,9 +54,10 @@ cargo build --release   # -> target/release/opseclint
 ## Usage
 
 ```bash
-opseclint script.sh                 # analyze a file
+opseclint script.sh                 # analyze a file (Linux/auditd by default)
 opseclint -c 'sudo cat /etc/shadow' # analyze a single command
 cat playbook.sh | opseclint         # read from stdin
+opseclint app.ps1 --platform windows-sysmon   # analyze against Windows/Sysmon
 
 opseclint script.sh --min 50        # only show findings >= detectability 50
 opseclint script.sh --json          # machine-readable output
@@ -81,6 +82,20 @@ opseclint examples/recon.sh --sigma sigma/rules
 
 The ruleset is read at runtime and never bundled, so the binary stays
 self-contained.
+
+### Platforms
+
+Select the host telemetry model with `--platform` (default `linux-auditd`):
+
+| Platform          | Telemetry model                                   |
+|-------------------|---------------------------------------------------|
+| `linux-auditd`    | Linux with auditd / EDR syscall events            |
+| `windows-sysmon`  | Windows with Sysmon (Event IDs) / Security log    |
+
+Each platform has its own embedded knowledge base, so `whoami` resolves to Linux
+`execve()` telemetry or a Windows Sysmon EID 1 depending on the target. Windows
+program names are normalized (`C:\…\certutil.exe` → `certutil`). When combined
+with `--sigma`, rules are filtered to the platform's `logsource.product`.
 
 ### GitHub code scanning
 
@@ -107,9 +122,10 @@ The [`examples/`](examples/) directory has illustrative (benign-to-run)
 playbooks to try it against:
 
 ```bash
-opseclint examples/recon.sh           # post-compromise recon
+opseclint examples/recon.sh           # post-compromise recon (Linux)
 opseclint examples/persistence.sh     # accounts, cron, systemd, ld.so.preload, ...
 opseclint examples/defense-evasion.sh # SELinux/firewall/auditd off, log & history wiping
+opseclint examples/windows-postex.ps1 --platform windows-sysmon  # Windows LOLBins, cred access
 ```
 
 ## Detectability score
@@ -134,14 +150,15 @@ A 0–100 estimate of how strongly an action surfaces in defensive telemetry
    resolves commands hidden in `$(...)` / backtick substitutions, and handles
    here-docs — a here-doc body is skipped as data unless it feeds a shell
    interpreter, in which case each body line is analyzed at its real line.
-2. **Knowledge base** (`data/knowledge.json`) — each entry maps a command (or a
-   raw pattern) to ATT&CK techniques, the telemetry it emits, representative
-   Sigma-style detections, and a detectability score.
+2. **Knowledge base** (`data/knowledge.json`, `data/knowledge-windows.json`) —
+   one KB per platform; each entry maps a command (or a raw pattern) to ATT&CK
+   techniques, the telemetry it emits, representative Sigma-style detections,
+   and a detectability score.
 3. **Analyzer** (`analyzer.rs`) — matches every action against the KB,
    deduplicates per line, and ranks findings loudest-first.
 4. **Report** (`report.rs`) — terminal or JSON output, plus the CI gate.
 
-The KB is embedded at compile time, so opseclint ships as a single static
+Both KBs are embedded at compile time, so opseclint ships as a single static
 binary with no runtime dependencies.
 
 ### Knowledge base schema
@@ -164,12 +181,14 @@ data change, not a code change.
 
 ## Status & roadmap
 
-`v0.1` is a seed: **Linux / auditd**, ~60 of the most common post-exploitation
-actions across discovery, credential access, execution, persistence, defense
-evasion, and container escape. On the roadmap:
+`v0.1` seeds two platforms: **Linux / auditd** (~60 entries) and **Windows /
+Sysmon** (~40 entries), covering the most common post-exploitation actions
+across discovery, credential access, execution, persistence, defense evasion,
+and (Linux) container escape. On the roadmap:
 
-- Broaden the KB further and add a Windows/Sysmon platform.
+- Deepen both KBs, especially domain / Active Directory tradecraft on Windows.
 - Cache the parsed Sigma index so large checkouts load faster.
+- macOS / Endpoint Security as a third platform.
 
 **Detection references in the seed KB are representative** of publicly available
 Sigma logic and should be validated against your deployed ruleset before you

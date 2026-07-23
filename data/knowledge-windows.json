@@ -1,0 +1,411 @@
+{
+  "platform": "windows-sysmon",
+  "note": "Seed knowledge base. Detection references are representative of publicly available Sigma logic (SigmaHQ) and should be validated against your deployed ruleset. Telemetry assumes a Windows host with Sysmon (and/or the Security event log with command-line + module auditing) emitting process, network, registry, and file events.",
+  "entries": [
+    {
+      "id": "whoami",
+      "command": "whoami",
+      "description": "Current user discovery",
+      "techniques": [{ "id": "T1033", "name": "System Owner/User Discovery" }],
+      "telemetry": ["Sysmon EID 1 (Process Create): whoami.exe", "Security 4688 with command line"],
+      "detections": [{ "source": "Sigma", "rule": "Whoami utility execution (proc_creation_win)", "confidence": "medium" }],
+      "noise": 40
+    },
+    {
+      "id": "whoami-priv",
+      "command": "whoami",
+      "args_contains": "/priv",
+      "description": "Privilege enumeration via whoami /priv",
+      "techniques": [{ "id": "T1033", "name": "System Owner/User Discovery" }],
+      "telemetry": ["Sysmon EID 1: whoami.exe /priv"],
+      "detections": [{ "source": "Sigma", "rule": "Whoami privilege enumeration (proc_creation_win)", "confidence": "high" }],
+      "noise": 52
+    },
+    {
+      "id": "systeminfo",
+      "command": "systeminfo",
+      "description": "System information / patch-level discovery",
+      "techniques": [{ "id": "T1082", "name": "System Information Discovery" }],
+      "telemetry": ["Sysmon EID 1: systeminfo.exe"],
+      "detections": [{ "source": "Sigma", "rule": "systeminfo execution (proc_creation_win)", "confidence": "low" }],
+      "noise": 35
+    },
+    {
+      "id": "ipconfig",
+      "command": "ipconfig",
+      "description": "Network configuration discovery",
+      "techniques": [{ "id": "T1016", "name": "System Network Configuration Discovery" }],
+      "telemetry": ["Sysmon EID 1: ipconfig.exe"],
+      "detections": [{ "source": "Sigma", "rule": "Network configuration discovery (proc_creation_win)", "confidence": "low" }],
+      "noise": 30
+    },
+    {
+      "id": "netstat",
+      "command": "netstat",
+      "description": "Network connection discovery",
+      "techniques": [{ "id": "T1049", "name": "System Network Connections Discovery" }],
+      "telemetry": ["Sysmon EID 1: netstat.exe -ano"],
+      "detections": [{ "source": "Sigma", "rule": "Network connection discovery (proc_creation_win)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "arp",
+      "command": "arp",
+      "description": "ARP cache enumeration — adjacent host discovery",
+      "techniques": [{ "id": "T1018", "name": "Remote System Discovery" }],
+      "telemetry": ["Sysmon EID 1: arp.exe -a"],
+      "detections": [{ "source": "Sigma", "rule": "Remote system discovery (proc_creation_win)", "confidence": "low" }],
+      "noise": 38
+    },
+    {
+      "id": "tasklist",
+      "command": "tasklist",
+      "description": "Running process discovery",
+      "techniques": [{ "id": "T1057", "name": "Process Discovery" }],
+      "telemetry": ["Sysmon EID 1: tasklist.exe"],
+      "detections": [{ "source": "Sigma", "rule": "Process discovery via tasklist (proc_creation_win)", "confidence": "low" }],
+      "noise": 35
+    },
+    {
+      "id": "net-user",
+      "command": "net",
+      "args_contains": "user",
+      "description": "Local/domain account enumeration via net user",
+      "techniques": [{ "id": "T1087.001", "name": "Account Discovery: Local Account" }],
+      "telemetry": ["Sysmon EID 1: net.exe user (often via net1.exe child)"],
+      "detections": [{ "source": "Sigma", "rule": "Account discovery via net (proc_creation_win)", "confidence": "medium" }],
+      "noise": 45
+    },
+    {
+      "id": "net-account-create",
+      "raw_contains": "user /add",
+      "description": "Local account creation via net user /add — persistence",
+      "techniques": [{ "id": "T1136.001", "name": "Create Account: Local Account" }],
+      "telemetry": ["Sysmon EID 1: net.exe user /add", "Security 4720 (user account created)"],
+      "detections": [{ "source": "Sigma", "rule": "Local account creation via net (proc_creation_win)", "confidence": "high" }],
+      "noise": 70
+    },
+    {
+      "id": "net-localgroup-admin",
+      "raw_contains": "localgroup administrators",
+      "description": "Adding a user to the local Administrators group — privilege escalation",
+      "techniques": [{ "id": "T1098", "name": "Account Manipulation" }],
+      "telemetry": ["Sysmon EID 1: net.exe localgroup administrators ... /add", "Security 4732 (member added to security-enabled local group)"],
+      "detections": [{ "source": "Sigma", "rule": "Local admin group modification (proc_creation_win)", "confidence": "high" }],
+      "noise": 68
+    },
+    {
+      "id": "domain-discovery",
+      "raw_contains": "/domain",
+      "description": "Domain account/group enumeration (net group /domain, etc.)",
+      "techniques": [{ "id": "T1087.002", "name": "Account Discovery: Domain Account" }],
+      "telemetry": ["Sysmon EID 1 with /domain argument", "LDAP queries to a domain controller"],
+      "detections": [{ "source": "Sigma", "rule": "Domain account discovery (proc_creation_win)", "confidence": "medium" }],
+      "noise": 48
+    },
+    {
+      "id": "nltest-trusts",
+      "raw_contains": "/domain_trusts",
+      "description": "Domain trust enumeration via nltest",
+      "techniques": [{ "id": "T1482", "name": "Domain Trust Discovery" }],
+      "telemetry": ["Sysmon EID 1: nltest.exe /domain_trusts"],
+      "detections": [{ "source": "Sigma", "rule": "Domain trust discovery via nltest (proc_creation_win)", "confidence": "high" }],
+      "noise": 55
+    },
+    {
+      "id": "net-share",
+      "raw_contains": "net share",
+      "description": "Network share discovery",
+      "techniques": [{ "id": "T1135", "name": "Network Share Discovery" }],
+      "telemetry": ["Sysmon EID 1: net.exe share"],
+      "detections": [{ "source": "Sigma", "rule": "Network share discovery (proc_creation_win)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "reg-query",
+      "command": "reg",
+      "args_contains": "query",
+      "description": "Registry query — configuration / autostart discovery",
+      "techniques": [{ "id": "T1012", "name": "Query Registry" }],
+      "telemetry": ["Sysmon EID 1: reg.exe query"],
+      "detections": [{ "source": "Sigma", "rule": "Registry query via reg.exe (proc_creation_win)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "run-key-persist",
+      "raw_contains": "currentversion\\run",
+      "description": "Writing a Run key — registry autostart persistence",
+      "techniques": [{ "id": "T1547.001", "name": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder" }],
+      "telemetry": ["Sysmon EID 13 (Registry Set) under ...\\CurrentVersion\\Run"],
+      "detections": [{ "source": "Sigma", "rule": "Run key modification (registry_set_win)", "confidence": "high" }],
+      "noise": 65
+    },
+    {
+      "id": "schtasks-create",
+      "command": "schtasks",
+      "args_contains": "/create",
+      "description": "Scheduled task creation — execution / persistence",
+      "techniques": [{ "id": "T1053.005", "name": "Scheduled Task/Job: Scheduled Task" }],
+      "telemetry": ["Sysmon EID 1: schtasks.exe /create", "Security 4698 (scheduled task created)"],
+      "detections": [{ "source": "Sigma", "rule": "Scheduled task creation (proc_creation_win)", "confidence": "high" }],
+      "noise": 62
+    },
+    {
+      "id": "service-create",
+      "command": "sc",
+      "args_contains": "create",
+      "description": "Windows service creation — persistence / privilege",
+      "techniques": [{ "id": "T1543.003", "name": "Create or Modify System Process: Windows Service" }],
+      "telemetry": ["Sysmon EID 1: sc.exe create", "Security 7045 (service installed)"],
+      "detections": [{ "source": "Sigma", "rule": "Service creation via sc.exe (proc_creation_win)", "confidence": "high" }],
+      "noise": 62
+    },
+    {
+      "id": "powershell-encoded",
+      "command": "powershell",
+      "args_contains": "-enc",
+      "description": "Encoded PowerShell command — obfuscated execution",
+      "techniques": [
+        { "id": "T1059.001", "name": "Command and Scripting Interpreter: PowerShell" },
+        { "id": "T1027", "name": "Obfuscated Files or Information" }
+      ],
+      "telemetry": ["Sysmon EID 1: powershell.exe -EncodedCommand", "PowerShell 4104 (scriptblock logging)"],
+      "detections": [{ "source": "Sigma", "rule": "Encoded PowerShell command (proc_creation_win)", "confidence": "high" }],
+      "noise": 75
+    },
+    {
+      "id": "powershell-hidden",
+      "raw_contains": "hidden",
+      "description": "Hidden-window PowerShell — defense evasion",
+      "techniques": [
+        { "id": "T1564.003", "name": "Hide Artifacts: Hidden Window" },
+        { "id": "T1059.001", "name": "Command and Scripting Interpreter: PowerShell" }
+      ],
+      "telemetry": ["Sysmon EID 1 with -WindowStyle Hidden / -w hidden"],
+      "detections": [{ "source": "Sigma", "rule": "Hidden window process execution (proc_creation_win)", "confidence": "medium" }],
+      "noise": 58
+    },
+    {
+      "id": "download-cradle",
+      "raw_contains": "downloadstring",
+      "description": "PowerShell download cradle (Net.WebClient.DownloadString) — in-memory tool ingress",
+      "techniques": [
+        { "id": "T1059.001", "name": "Command and Scripting Interpreter: PowerShell" },
+        { "id": "T1105", "name": "Ingress Tool Transfer" }
+      ],
+      "telemetry": ["Sysmon EID 1 + EID 3 (network) from powershell.exe", "PowerShell 4104 containing DownloadString"],
+      "detections": [{ "source": "Sigma", "rule": "PowerShell download cradle (ps_script / proc_creation_win)", "confidence": "high" }],
+      "noise": 80
+    },
+    {
+      "id": "download-file",
+      "raw_contains": "downloadfile",
+      "description": "PowerShell DownloadFile — tool ingress to disk",
+      "techniques": [{ "id": "T1105", "name": "Ingress Tool Transfer" }],
+      "telemetry": ["Sysmon EID 1 + EID 3 from powershell.exe", "Sysmon EID 11 (File Create) of the downloaded payload"],
+      "detections": [{ "source": "Sigma", "rule": "PowerShell DownloadFile (ps_script)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "invoke-expression",
+      "raw_contains": "invoke-expression",
+      "description": "Invoke-Expression (IEX) — dynamic code execution",
+      "techniques": [{ "id": "T1059.001", "name": "Command and Scripting Interpreter: PowerShell" }],
+      "telemetry": ["PowerShell 4104 scriptblock containing Invoke-Expression"],
+      "detections": [{ "source": "Sigma", "rule": "Invoke-Expression usage (ps_script)", "confidence": "medium" }],
+      "noise": 65
+    },
+    {
+      "id": "certutil-download",
+      "command": "certutil",
+      "args_contains": "urlcache",
+      "description": "certutil used to download a file — LOLBin tool ingress",
+      "techniques": [{ "id": "T1105", "name": "Ingress Tool Transfer" }],
+      "telemetry": ["Sysmon EID 1: certutil.exe -urlcache -f", "Sysmon EID 3 (network) from certutil.exe"],
+      "detections": [{ "source": "Sigma", "rule": "certutil file download (proc_creation_win)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "certutil-decode",
+      "command": "certutil",
+      "args_contains": "decode",
+      "description": "certutil used to decode a payload — LOLBin deobfuscation",
+      "techniques": [
+        { "id": "T1140", "name": "Deobfuscate/Decode Files or Information" },
+        { "id": "T1027", "name": "Obfuscated Files or Information" }
+      ],
+      "telemetry": ["Sysmon EID 1: certutil.exe -decode"],
+      "detections": [{ "source": "Sigma", "rule": "certutil decode (proc_creation_win)", "confidence": "medium" }],
+      "noise": 60
+    },
+    {
+      "id": "bitsadmin-transfer",
+      "command": "bitsadmin",
+      "args_contains": "/transfer",
+      "description": "BITS job for file transfer — stealthy tool ingress",
+      "techniques": [{ "id": "T1197", "name": "BITS Jobs" }],
+      "telemetry": ["Sysmon EID 1: bitsadmin.exe /transfer", "BITS-Client operational log"],
+      "detections": [{ "source": "Sigma", "rule": "bitsadmin transfer (proc_creation_win)", "confidence": "medium" }],
+      "noise": 65
+    },
+    {
+      "id": "mshta-http",
+      "command": "mshta",
+      "args_contains": "http",
+      "description": "mshta executing remote content — LOLBin proxy execution",
+      "techniques": [{ "id": "T1218.005", "name": "System Binary Proxy Execution: Mshta" }],
+      "telemetry": ["Sysmon EID 1: mshta.exe with a URL", "Sysmon EID 3 (network) from mshta.exe"],
+      "detections": [{ "source": "Sigma", "rule": "mshta remote execution (proc_creation_win)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "regsvr32-squiblydoo",
+      "raw_contains": "scrobj.dll",
+      "description": "regsvr32 scrobj.dll (Squiblydoo) — LOLBin proxy execution",
+      "techniques": [{ "id": "T1218.010", "name": "System Binary Proxy Execution: Regsvr32" }],
+      "telemetry": ["Sysmon EID 1: regsvr32.exe /i:<url> scrobj.dll", "Sysmon EID 7 (Image Loaded) scrobj.dll"],
+      "detections": [{ "source": "Sigma", "rule": "Squiblydoo regsvr32 execution (proc_creation_win)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "wmic-process-create",
+      "command": "wmic",
+      "args_contains": "process call create",
+      "description": "Process creation via WMI",
+      "techniques": [{ "id": "T1047", "name": "Windows Management Instrumentation" }],
+      "telemetry": ["Sysmon EID 1: wmic.exe process call create", "WMI-Activity operational log"],
+      "detections": [{ "source": "Sigma", "rule": "WMI process creation (proc_creation_win)", "confidence": "high" }],
+      "noise": 66
+    },
+    {
+      "id": "sam-hive-dump",
+      "raw_contains": "hklm\\sam",
+      "description": "Dumping the SAM registry hive — credential access",
+      "techniques": [{ "id": "T1003.002", "name": "OS Credential Dumping: Security Account Manager" }],
+      "telemetry": ["Sysmon EID 1: reg.exe save HKLM\\SAM", "Sysmon EID 11 (File Create) of the exported hive"],
+      "detections": [{ "source": "Sigma", "rule": "SAM hive export via reg.exe (proc_creation_win)", "confidence": "high" }],
+      "noise": 82
+    },
+    {
+      "id": "ntds-dump",
+      "raw_contains": "ntds.dit",
+      "description": "Access to NTDS.dit — domain credential database dumping",
+      "techniques": [{ "id": "T1003.003", "name": "OS Credential Dumping: NTDS" }],
+      "telemetry": ["Sysmon EID 1 referencing ntds.dit", "ntdsutil / vssadmin activity"],
+      "detections": [{ "source": "Sigma", "rule": "NTDS.dit access (proc_creation_win)", "confidence": "high" }],
+      "noise": 84
+    },
+    {
+      "id": "lsass-comsvcs",
+      "raw_contains": "comsvcs.dll",
+      "description": "LSASS memory dump via comsvcs.dll MiniDump — credential access",
+      "techniques": [{ "id": "T1003.001", "name": "OS Credential Dumping: LSASS Memory" }],
+      "telemetry": ["Sysmon EID 10 (Process Access) targeting lsass.exe", "Sysmon EID 1: rundll32 comsvcs.dll, MiniDump"],
+      "detections": [{ "source": "Sigma", "rule": "LSASS dump via comsvcs MiniDump (proc_creation_win)", "confidence": "high" }],
+      "noise": 84
+    },
+    {
+      "id": "mimikatz",
+      "raw_contains": "sekurlsa",
+      "description": "Mimikatz sekurlsa — credential material extraction",
+      "techniques": [{ "id": "T1003.001", "name": "OS Credential Dumping: LSASS Memory" }],
+      "telemetry": ["Sysmon EID 10 (Process Access) to lsass.exe with suspicious access mask"],
+      "detections": [{ "source": "Sigma", "rule": "Mimikatz sekurlsa indicators (proc_creation_win / ps_script)", "confidence": "high" }],
+      "noise": 85
+    },
+    {
+      "id": "procdump-lsass",
+      "command": "procdump",
+      "args_contains": "lsass",
+      "description": "procdump against lsass — credential access",
+      "techniques": [{ "id": "T1003.001", "name": "OS Credential Dumping: LSASS Memory" }],
+      "telemetry": ["Sysmon EID 10 (Process Access) to lsass.exe", "Sysmon EID 11 (File Create) of the .dmp file"],
+      "detections": [{ "source": "Sigma", "rule": "procdump lsass dump (proc_creation_win)", "confidence": "high" }],
+      "noise": 80
+    },
+    {
+      "id": "defender-disable",
+      "raw_contains": "disablerealtimemonitoring",
+      "description": "Disabling Defender real-time monitoring — defense impairment",
+      "techniques": [{ "id": "T1562.001", "name": "Impair Defenses: Disable or Modify Tools" }],
+      "telemetry": ["PowerShell 4104: Set-MpPreference -DisableRealtimeMonitoring $true"],
+      "detections": [{ "source": "Sigma", "rule": "Defender real-time protection disabled (ps_script)", "confidence": "high" }],
+      "noise": 78
+    },
+    {
+      "id": "defender-exclusion",
+      "raw_contains": "-exclusionpath",
+      "description": "Adding a Defender exclusion path — defense impairment",
+      "techniques": [{ "id": "T1562.001", "name": "Impair Defenses: Disable or Modify Tools" }],
+      "telemetry": ["PowerShell 4104: Add-MpPreference -ExclusionPath"],
+      "detections": [{ "source": "Sigma", "rule": "Defender exclusion added (ps_script)", "confidence": "high" }],
+      "noise": 70
+    },
+    {
+      "id": "netsh-firewall",
+      "raw_contains": "advfirewall set",
+      "description": "Modifying the Windows firewall via netsh — defense impairment",
+      "techniques": [{ "id": "T1562.004", "name": "Impair Defenses: Disable or Modify System Firewall" }],
+      "telemetry": ["Sysmon EID 1: netsh.exe advfirewall set ... state off"],
+      "detections": [{ "source": "Sigma", "rule": "Firewall modification via netsh (proc_creation_win)", "confidence": "medium" }],
+      "noise": 64
+    },
+    {
+      "id": "clear-eventlog",
+      "command": "wevtutil",
+      "args_contains": "cl",
+      "description": "Clearing a Windows event log — anti-forensics",
+      "techniques": [{ "id": "T1070.001", "name": "Indicator Removal: Clear Windows Event Logs" }],
+      "telemetry": ["Sysmon EID 1: wevtutil.exe cl", "Security 1102 (audit log cleared)"],
+      "detections": [{ "source": "Sigma", "rule": "Event log cleared via wevtutil (proc_creation_win)", "confidence": "high" }],
+      "noise": 76
+    },
+    {
+      "id": "clear-eventlog-ps",
+      "raw_contains": "clear-eventlog",
+      "description": "Clearing event logs via PowerShell — anti-forensics",
+      "techniques": [{ "id": "T1070.001", "name": "Indicator Removal: Clear Windows Event Logs" }],
+      "telemetry": ["PowerShell 4104: Clear-EventLog", "Security 1102 (audit log cleared)"],
+      "detections": [{ "source": "Sigma", "rule": "Event log cleared via PowerShell (ps_script)", "confidence": "high" }],
+      "noise": 76
+    },
+    {
+      "id": "vssadmin-delete",
+      "command": "vssadmin",
+      "args_contains": "delete shadows",
+      "description": "Deleting volume shadow copies — inhibit system recovery",
+      "techniques": [{ "id": "T1490", "name": "Inhibit System Recovery" }],
+      "telemetry": ["Sysmon EID 1: vssadmin.exe delete shadows"],
+      "detections": [{ "source": "Sigma", "rule": "Shadow copy deletion (proc_creation_win)", "confidence": "high" }],
+      "noise": 78
+    },
+    {
+      "id": "bcdedit-recovery",
+      "command": "bcdedit",
+      "description": "Modifying boot configuration — inhibit system recovery",
+      "techniques": [{ "id": "T1490", "name": "Inhibit System Recovery" }],
+      "telemetry": ["Sysmon EID 1: bcdedit.exe /set ... recoveryenabled no"],
+      "detections": [{ "source": "Sigma", "rule": "Boot recovery tampering via bcdedit (proc_creation_win)", "confidence": "medium" }],
+      "noise": 60
+    },
+    {
+      "id": "attrib-hidden",
+      "command": "attrib",
+      "args_contains": "+h",
+      "description": "Setting the hidden attribute — hide artifacts",
+      "techniques": [{ "id": "T1564.001", "name": "Hide Artifacts: Hidden Files and Directories" }],
+      "telemetry": ["Sysmon EID 1: attrib.exe +h"],
+      "detections": [{ "source": "Sigma", "rule": "Hidden file attribute set (proc_creation_win)", "confidence": "low" }],
+      "noise": 45
+    },
+    {
+      "id": "rundll32",
+      "command": "rundll32",
+      "description": "rundll32 execution — common proxy-execution LOLBin",
+      "techniques": [{ "id": "T1218.011", "name": "System Binary Proxy Execution: Rundll32" }],
+      "telemetry": ["Sysmon EID 1: rundll32.exe", "Sysmon EID 7 (Image Loaded) of the target DLL"],
+      "detections": [{ "source": "Sigma", "rule": "Suspicious rundll32 execution (proc_creation_win)", "confidence": "low" }],
+      "noise": 50
+    }
+  ]
+}

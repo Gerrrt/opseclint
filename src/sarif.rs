@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn sarif_is_valid_json_with_expected_shape() {
-        let kb = kb::load().unwrap();
+        let kb = kb::load(kb::Platform::LinuxAuditd).unwrap();
         let report = analyzer::analyze("cat /etc/shadow", &kb);
         let out = render(&report, "examples/recon.sh");
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();

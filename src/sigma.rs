@@ -78,9 +78,10 @@ fn technique_from_tag(tag: &str) -> Option<String> {
 
 impl SigmaIndex {
     /// Recursively load every `.yml`/`.yaml` Sigma rule under `dir`. Rules whose
-    /// logsource product is set to something other than `linux` are skipped, to
-    /// keep matches relevant to this platform. Unparseable files are ignored.
-    pub fn load_dir(dir: &Path) -> std::io::Result<SigmaIndex> {
+    /// logsource product is set to something other than `product` are skipped,
+    /// to keep matches relevant to the target platform. `product` is e.g.
+    /// `"linux"` or `"windows"`. Unparseable files are ignored.
+    pub fn load_dir(dir: &Path, product: &str) -> std::io::Result<SigmaIndex> {
         let mut index = SigmaIndex::default();
         let mut stack = vec![dir.to_path_buf()];
         while let Some(path) = stack.pop() {
@@ -100,23 +101,23 @@ impl SigmaIndex {
                 }
                 index.files_scanned += 1;
                 if let Ok(content) = std::fs::read_to_string(&p) {
-                    index.ingest_file(&content);
+                    index.ingest_file(&content, product);
                 }
             }
         }
         Ok(index)
     }
 
-    fn ingest_file(&mut self, content: &str) {
+    fn ingest_file(&mut self, content: &str, product: &str) {
         // A Sigma file may hold multiple YAML documents.
         for doc in serde_yaml::Deserializer::from_str(content) {
             let Ok(raw) = SigmaRuleRaw::deserialize(doc) else {
                 continue;
             };
-            // Keep Linux-relevant rules (product linux or unspecified).
+            // Keep platform-relevant rules (matching product or unspecified).
             if let Some(ls) = &raw.logsource
-                && let Some(product) = &ls.product
-                && product.to_lowercase() != "linux"
+                && let Some(rule_product) = &ls.product
+                && !rule_product.eq_ignore_ascii_case(product)
             {
                 continue;
             }
@@ -211,10 +212,10 @@ mod tests {
 
     #[test]
     fn indexes_and_enriches_from_fixtures() {
-        let index = SigmaIndex::load_dir(&fixtures()).expect("fixtures load");
+        let index = SigmaIndex::load_dir(&fixtures(), "linux").expect("fixtures load");
         assert!(index.rules_indexed >= 2, "expected fixture rules indexed");
 
-        let kb = kb::load().unwrap();
+        let kb = kb::load(kb::Platform::LinuxAuditd).unwrap();
         let mut report = analyzer::analyze("cat /etc/shadow", &kb);
         let n = enrich(&mut report, &index);
         assert!(n >= 1);
@@ -235,8 +236,17 @@ mod tests {
 
     #[test]
     fn non_linux_rules_are_skipped() {
-        let index = SigmaIndex::load_dir(&fixtures()).expect("fixtures load");
+        let index = SigmaIndex::load_dir(&fixtures(), "linux").expect("fixtures load");
         // The Windows fixture is tagged T1057 but must not be indexed.
         assert!(index.rules_for(&["T1057".to_string()]).is_empty());
+    }
+
+    #[test]
+    fn windows_product_selects_windows_rules() {
+        let index = SigmaIndex::load_dir(&fixtures(), "windows").expect("fixtures load");
+        // With the windows product, the T1057 fixture is indexed and the
+        // linux-only shadow rule is not.
+        assert!(!index.rules_for(&["T1057".to_string()]).is_empty());
+        assert!(index.rules_for(&["T1003.008".to_string()]).is_empty());
     }
 }

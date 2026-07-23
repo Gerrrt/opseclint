@@ -107,9 +107,21 @@ fn is_assignment(tok: &str) -> bool {
     false
 }
 
+/// Executable-name extensions to strip so `whoami.exe` matches `whoami`. Safe
+/// for Linux input (native binaries rarely carry these).
+const EXE_EXTENSIONS: &[&str] = &[".exe", ".com", ".bat", ".cmd", ".ps1"];
+
 fn basename(program: &str) -> String {
     let trimmed = program.strip_prefix("./").unwrap_or(program);
-    trimmed.rsplit('/').next().unwrap_or(trimmed).to_string()
+    // Split on both POSIX and Windows path separators.
+    let last = trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed);
+    let lower = last.to_ascii_lowercase();
+    for ext in EXE_EXTENSIONS {
+        if let Some(stripped) = lower.strip_suffix(ext) {
+            return last[..stripped.len()].to_string();
+        }
+    }
+    last.to_string()
 }
 
 /// Resolve one segment's tokens into a [`Command`], skipping leading

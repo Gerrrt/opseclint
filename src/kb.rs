@@ -1,14 +1,42 @@
-//! Knowledge-base loading and matching. The KB is embedded at compile time so
-//! the tool ships as a single self-contained binary.
+//! Knowledge-base loading and matching. Each platform's KB is embedded at
+//! compile time so the tool ships as a single self-contained binary.
+
+use clap::ValueEnum;
 
 use crate::model::{KbEntry, KnowledgeBase};
 use crate::parser::Command;
 
-const EMBEDDED_KB: &str = include_str!("../data/knowledge.json");
+const EMBEDDED_LINUX: &str = include_str!("../data/knowledge.json");
+const EMBEDDED_WINDOWS: &str = include_str!("../data/knowledge-windows.json");
 
-/// Load the embedded knowledge base.
-pub fn load() -> Result<KnowledgeBase, serde_json::Error> {
-    serde_json::from_str(EMBEDDED_KB)
+/// The host platform / telemetry model an analysis targets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum Platform {
+    /// Linux hosts with auditd / EDR syscall telemetry.
+    #[value(name = "linux-auditd", alias = "linux")]
+    LinuxAuditd,
+    /// Windows hosts with Sysmon / Security-log telemetry.
+    #[value(name = "windows-sysmon", alias = "windows")]
+    WindowsSysmon,
+}
+
+impl Platform {
+    /// The Sigma `logsource.product` value to filter rules by for this platform.
+    pub fn sigma_product(self) -> &'static str {
+        match self {
+            Platform::LinuxAuditd => "linux",
+            Platform::WindowsSysmon => "windows",
+        }
+    }
+}
+
+/// Load the embedded knowledge base for a platform.
+pub fn load(platform: Platform) -> Result<KnowledgeBase, serde_json::Error> {
+    let raw = match platform {
+        Platform::LinuxAuditd => EMBEDDED_LINUX,
+        Platform::WindowsSysmon => EMBEDDED_WINDOWS,
+    };
+    serde_json::from_str(raw)
 }
 
 /// Does `entry` apply to `cmd` within its raw line?

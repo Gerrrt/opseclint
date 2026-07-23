@@ -1,4 +1,5 @@
-//! opseclint — a detection-coverage analyzer for Linux/auditd.
+//! opseclint — a detection-coverage analyzer for Linux/auditd and
+//! Windows/Sysmon.
 //!
 //! Point it at a command, a script, or a playbook and it statically resolves
 //! each action to the ATT&CK technique(s) it implements, the host telemetry it
@@ -30,6 +31,10 @@ struct Cli {
     /// Analyze a single command string instead of a file.
     #[arg(short, long)]
     command: Option<String>,
+
+    /// Target platform / telemetry model.
+    #[arg(long, value_enum, default_value = "linux-auditd")]
+    platform: kb::Platform,
 
     /// Emit machine-readable JSON instead of a terminal report.
     #[arg(long)]
@@ -76,7 +81,7 @@ fn read_input(cli: &Cli) -> std::io::Result<String> {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    let kb = match kb::load() {
+    let kb = match kb::load(cli.platform) {
         Ok(kb) => kb,
         Err(e) => {
             eprintln!("opseclint: failed to load knowledge base: {e}");
@@ -98,7 +103,7 @@ fn main() -> ExitCode {
     }
 
     if let Some(dir) = &cli.sigma {
-        match sigma::SigmaIndex::load_dir(std::path::Path::new(dir)) {
+        match sigma::SigmaIndex::load_dir(std::path::Path::new(dir), cli.platform.sigma_product()) {
             Ok(index) => {
                 let enriched = sigma::enrich(&mut report, &index);
                 if !cli.json && !cli.sarif {

