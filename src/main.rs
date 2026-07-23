@@ -11,6 +11,7 @@ mod kb;
 mod model;
 mod parser;
 mod report;
+mod sarif;
 
 use std::io::{IsTerminal, Read};
 use std::process::ExitCode;
@@ -32,6 +33,10 @@ struct Cli {
     /// Emit machine-readable JSON instead of a terminal report.
     #[arg(long)]
     json: bool,
+
+    /// Emit SARIF 2.1.0 (for GitHub code scanning / SARIF-aware tools).
+    #[arg(long, conflicts_with = "json")]
+    sarif: bool,
 
     /// Only report findings at or above this detectability score (0-100).
     #[arg(long, default_value_t = 0)]
@@ -86,7 +91,17 @@ fn main() -> ExitCode {
         report.findings.retain(|f| f.noise >= cli.min);
     }
 
-    if cli.json {
+    if cli.sarif {
+        let source_uri = cli.path.clone().unwrap_or_else(|| {
+            if cli.command.is_some() {
+                "<command>"
+            } else {
+                "stdin"
+            }
+            .to_string()
+        });
+        println!("{}", sarif::render(&report, &source_uri));
+    } else if cli.json {
         println!("{}", report::render_json(&report));
     } else {
         let color = !cli.no_color && std::io::stdout().is_terminal();

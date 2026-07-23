@@ -35,3 +35,31 @@ jobs:
 
       - name: Test
         run: cargo test --verbose
+
+  scan:
+    name: code scanning upload
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Run opseclint (SARIF)
+        run: ./target/release/opseclint examples/recon.sh --sarif > opseclint.sarif
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: opseclint.sarif
+          category: opseclint

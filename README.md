@@ -60,8 +60,17 @@ cat playbook.sh | opseclint         # read from stdin
 
 opseclint script.sh --min 50        # only show findings >= detectability 50
 opseclint script.sh --json          # machine-readable output
+opseclint script.sh --sarif         # SARIF 2.1.0 (GitHub code scanning)
 opseclint script.sh --ci --threshold 70   # exit 1 if loudest action >= 70
 ```
+
+### GitHub code scanning
+
+`--sarif` emits SARIF 2.1.0, so findings can surface in a repo's **Security →
+Code scanning** tab. Each finding maps to a rule (tagged with its ATT&CK
+technique and a `security-severity` derived from the detectability score) and is
+anchored to the line of the analyzed file. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+for a job that runs opseclint and uploads the results.
 
 ### CI gating
 
@@ -128,7 +137,6 @@ actions. On the roadmap:
 - Broaden the Linux KB and add a Windows/Sysmon platform.
 - Load rules directly from a SigmaHQ checkout to attach real rule IDs.
 - Richer parsing (command substitution, here-docs, multi-line constructs).
-- SARIF output for code-scanning integrations.
 
 **Detection references in the seed KB are representative** of publicly available
 Sigma logic and should be validated against your deployed ruleset before you
