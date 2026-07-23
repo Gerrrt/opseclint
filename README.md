@@ -131,8 +131,9 @@ data change, not a code change.
 
 ## Status & roadmap
 
-`v0.1` is a seed: **Linux / auditd**, ~35 of the most common post-exploitation
-actions. On the roadmap:
+`v0.1` is a seed: **Linux / auditd**, ~60 of the most common post-exploitation
+actions across discovery, credential access, execution, persistence, defense
+evasion, and container escape. On the roadmap:
 
 - Broaden the Linux KB and add a Windows/Sysmon platform.
 - Load rules directly from a SigmaHQ checkout to attach real rule IDs.

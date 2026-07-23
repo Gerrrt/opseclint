@@ -119,4 +119,34 @@ mod tests {
         let count = report.findings.iter().filter(|f| f.rule_id == "id").count();
         assert_eq!(count, 1);
     }
+
+    #[test]
+    fn detects_private_key_theft() {
+        let report = analyze("cp ~/.ssh/id_rsa /tmp/k", &kb());
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.rule_id == "private-key-rsa")
+        );
+    }
+
+    #[test]
+    fn detects_docker_socket_escape() {
+        let report = analyze(
+            "curl --unix-socket /var/run/docker.sock http://x/containers/json",
+            &kb(),
+        );
+        assert!(report.findings.iter().any(|f| f.rule_id == "docker-sock"));
+    }
+
+    #[test]
+    fn kb_all_entries_parse() {
+        let kb = kb();
+        assert!(
+            kb.entries.len() >= 55,
+            "expected a grown KB, got {}",
+            kb.entries.len()
+        );
+    }
 }

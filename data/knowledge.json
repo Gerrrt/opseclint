@@ -380,6 +380,234 @@
       "telemetry": ["execve() of ssh", "outbound connect() :22", "auth event on the destination host"],
       "detections": [{ "source": "Sigma", "rule": "Outbound SSH from unusual context (proc_creation_lnx)", "confidence": "low" }],
       "noise": 45
+    },
+    {
+      "id": "private-key-rsa",
+      "raw_contains": "id_rsa",
+      "description": "Access to an SSH RSA private key — unsecured credential theft",
+      "techniques": [{ "id": "T1552.004", "name": "Unsecured Credentials: Private Keys" }],
+      "telemetry": ["openat() of ~/.ssh/id_rsa — auditd file watch", "read by non-ssh process"],
+      "detections": [{ "source": "Sigma", "rule": "Private key file access (file_event_lnx)", "confidence": "medium" }],
+      "noise": 65
+    },
+    {
+      "id": "private-key-ed25519",
+      "raw_contains": "id_ed25519",
+      "description": "Access to an SSH Ed25519 private key — unsecured credential theft",
+      "techniques": [{ "id": "T1552.004", "name": "Unsecured Credentials: Private Keys" }],
+      "telemetry": ["openat() of ~/.ssh/id_ed25519 — auditd file watch", "read by non-ssh process"],
+      "detections": [{ "source": "Sigma", "rule": "Private key file access (file_event_lnx)", "confidence": "medium" }],
+      "noise": 65
+    },
+    {
+      "id": "creds-in-files",
+      "command": "grep",
+      "args_contains": "password",
+      "description": "Grepping the filesystem for passwords — credentials in files",
+      "techniques": [{ "id": "T1552.001", "name": "Unsecured Credentials: Credentials In Files" }],
+      "telemetry": ["execve() of grep with a credential keyword", "recursive read() across many files"],
+      "detections": [{ "source": "Sigma", "rule": "Credential keyword search (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "group-discovery",
+      "command": "cat",
+      "args_contains": "/etc/group",
+      "description": "Enumeration of local groups via /etc/group",
+      "techniques": [{ "id": "T1069.001", "name": "Permission Groups Discovery: Local Groups" }],
+      "telemetry": ["openat() of /etc/group"],
+      "detections": [{ "source": "Sigma", "rule": "Local group enumeration (file_event_lnx)", "confidence": "low" }],
+      "noise": 40
+    },
+    {
+      "id": "sudoers-tamper",
+      "raw_contains": "/etc/sudoers",
+      "description": "Reading or modifying /etc/sudoers — privilege escalation / persistence",
+      "techniques": [{ "id": "T1548.003", "name": "Abuse Elevation Control Mechanism: Sudo and Sudo Caching" }],
+      "telemetry": ["openat()/write() of /etc/sudoers or /etc/sudoers.d/* — high-signal auditd file watch"],
+      "detections": [{ "source": "Sigma", "rule": "Sudoers file modification (file_event_lnx)", "confidence": "high" }],
+      "noise": 72
+    },
+    {
+      "id": "nmap",
+      "command": "nmap",
+      "description": "Active network service scanning",
+      "techniques": [{ "id": "T1046", "name": "Network Service Discovery" }],
+      "telemetry": ["execve() of nmap", "burst of outbound connect() across many hosts/ports"],
+      "detections": [{ "source": "Sigma", "rule": "Port/service scanner execution (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 65
+    },
+    {
+      "id": "masscan",
+      "command": "masscan",
+      "description": "High-rate network port scanning",
+      "techniques": [{ "id": "T1046", "name": "Network Service Discovery" }],
+      "telemetry": ["execve() of masscan", "very high rate of outbound SYN packets"],
+      "detections": [{ "source": "Sigma", "rule": "Mass port scanner execution (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 65
+    },
+    {
+      "id": "tcpdump",
+      "command": "tcpdump",
+      "description": "Packet capture — network sniffing",
+      "techniques": [{ "id": "T1040", "name": "Network Sniffing" }],
+      "telemetry": ["execve() of tcpdump", "creation of an AF_PACKET raw socket (needs CAP_NET_RAW)"],
+      "detections": [{ "source": "Sigma", "rule": "Packet capture utility execution (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 60
+    },
+    {
+      "id": "socat",
+      "command": "socat",
+      "description": "Bidirectional relay — potential C2 or reverse shell channel",
+      "techniques": [
+        { "id": "T1095", "name": "Non-Application Layer Protocol" },
+        { "id": "T1071", "name": "Application Layer Protocol" }
+      ],
+      "telemetry": ["execve() of socat", "outbound/listening socket, often with EXEC:/bin/sh"],
+      "detections": [{ "source": "Sigma", "rule": "socat relay / reverse shell (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 70
+    },
+    {
+      "id": "python-http-server",
+      "command": "python3",
+      "args_contains": "http.server",
+      "description": "Ad-hoc HTTP server — data staging / exfiltration channel",
+      "techniques": [
+        { "id": "T1105", "name": "Ingress Tool Transfer" },
+        { "id": "T1567", "name": "Exfiltration Over Web Service" }
+      ],
+      "telemetry": ["execve() of python -m http.server", "listening socket bind()/listen() on a high port"],
+      "detections": [{ "source": "Sigma", "rule": "Python http.server execution (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "kernel-module-insmod",
+      "command": "insmod",
+      "description": "Loading a kernel module — potential rootkit / persistence",
+      "techniques": [{ "id": "T1547.006", "name": "Boot or Logon Autostart Execution: Kernel Modules and Extensions" }],
+      "telemetry": ["execve() of insmod", "init_module()/finit_module() syscall — high-signal auditd event"],
+      "detections": [{ "source": "Sigma", "rule": "Kernel module load via insmod (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 68
+    },
+    {
+      "id": "kernel-module-modprobe",
+      "command": "modprobe",
+      "description": "Loading a kernel module by name — potential rootkit / persistence",
+      "techniques": [{ "id": "T1547.006", "name": "Boot or Logon Autostart Execution: Kernel Modules and Extensions" }],
+      "telemetry": ["execve() of modprobe", "finit_module() syscall"],
+      "detections": [{ "source": "Sigma", "rule": "Kernel module load via modprobe (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "ld-preload",
+      "raw_contains": "ld.so.preload",
+      "description": "Writing /etc/ld.so.preload — dynamic linker hijacking (userland rootkit)",
+      "techniques": [{ "id": "T1574.006", "name": "Hijack Execution Flow: Dynamic Linker Hijacking" }],
+      "telemetry": ["create()/write() of /etc/ld.so.preload — high-signal auditd file watch"],
+      "detections": [{ "source": "Sigma", "rule": "ld.so.preload modification (file_event_lnx)", "confidence": "high" }],
+      "noise": 80
+    },
+    {
+      "id": "shell-profile-persist",
+      "raw_contains": ".bashrc",
+      "description": "Modifying a shell rc file (.bashrc) — logon persistence",
+      "techniques": [{ "id": "T1546.004", "name": "Event Triggered Execution: Unix Shell Configuration Modification" }],
+      "telemetry": ["write()/append to ~/.bashrc — auditd file watch"],
+      "detections": [{ "source": "Sigma", "rule": "Shell rc file modification (file_event_lnx)", "confidence": "medium" }],
+      "noise": 55
+    },
+    {
+      "id": "cron-persist",
+      "raw_contains": "/etc/cron",
+      "description": "Writing to system cron locations — scheduled-task persistence",
+      "techniques": [{ "id": "T1053.003", "name": "Scheduled Task/Job: Cron" }],
+      "telemetry": ["create()/write() under /etc/cron.d, /etc/crontab, /etc/cron.* — auditd file watch"],
+      "detections": [{ "source": "Sigma", "rule": "System cron persistence (file_event_lnx)", "confidence": "medium" }],
+      "noise": 58
+    },
+    {
+      "id": "at-job",
+      "command": "at",
+      "description": "One-off scheduled job via at — execution / persistence",
+      "techniques": [{ "id": "T1053.002", "name": "Scheduled Task/Job: At" }],
+      "telemetry": ["execve() of at", "spool file created under /var/spool/at|cron/atjobs"],
+      "detections": [{ "source": "Sigma", "rule": "at job scheduling (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 48
+    },
+    {
+      "id": "disable-audit",
+      "raw_contains": "auditctl",
+      "description": "Manipulating the Linux audit subsystem — defense/telemetry impairment",
+      "techniques": [{ "id": "T1562.012", "name": "Impair Defenses: Disable or Modify Linux Audit System" }],
+      "telemetry": ["execve() of auditctl", "changes to audit rules / auditd state"],
+      "detections": [{ "source": "Sigma", "rule": "Audit subsystem tampering (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 75
+    },
+    {
+      "id": "clear-syslog",
+      "raw_contains": "/var/log",
+      "description": "Access to or modification of system logs — potential log clearing (anti-forensics)",
+      "techniques": [{ "id": "T1070.002", "name": "Indicator Removal: Clear Linux or Mac System Logs" }],
+      "telemetry": ["truncate()/unlink()/write() under /var/log — auditd file watch"],
+      "detections": [{ "source": "Sigma", "rule": "System log tampering (file_event_lnx)", "confidence": "medium" }],
+      "noise": 60
+    },
+    {
+      "id": "journal-vacuum",
+      "raw_contains": "--vacuum",
+      "description": "journalctl --vacuum — deleting systemd journal logs (anti-forensics)",
+      "techniques": [{ "id": "T1070.002", "name": "Indicator Removal: Clear Linux or Mac System Logs" }],
+      "telemetry": ["execve() of journalctl --vacuum-*", "unlink() of journal files under /var/log/journal"],
+      "detections": [{ "source": "Sigma", "rule": "systemd journal vacuum (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 70
+    },
+    {
+      "id": "docker-sock",
+      "raw_contains": "docker.sock",
+      "description": "Interacting with the Docker socket — container-to-host escape vector",
+      "techniques": [{ "id": "T1611", "name": "Escape to Host" }],
+      "telemetry": ["connect() to /var/run/docker.sock", "container spawning a privileged sibling"],
+      "detections": [{ "source": "Sigma", "rule": "Docker socket abuse (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 75
+    },
+    {
+      "id": "privileged-container",
+      "raw_contains": "--privileged",
+      "description": "Launching a privileged container — container escape vector",
+      "techniques": [{ "id": "T1611", "name": "Escape to Host" }],
+      "telemetry": ["execve() of a container runtime with --privileged", "container with full host capabilities"],
+      "detections": [{ "source": "Sigma", "rule": "Privileged container launch (proc_creation_lnx)", "confidence": "high" }],
+      "noise": 70
+    },
+    {
+      "id": "login-discovery",
+      "command": "last",
+      "description": "Login history enumeration",
+      "techniques": [{ "id": "T1087.001", "name": "Account Discovery: Local Account" }],
+      "telemetry": ["execve() of last", "read of /var/log/wtmp"],
+      "detections": [{ "source": "Sigma", "rule": "Login history discovery (proc_creation_lnx)", "confidence": "low" }],
+      "noise": 30
+    },
+    {
+      "id": "capabilities-enum",
+      "command": "getcap",
+      "description": "Enumerating file capabilities — privilege-escalation recon",
+      "techniques": [
+        { "id": "T1083", "name": "File and Directory Discovery" },
+        { "id": "T1548.001", "name": "Abuse Elevation Control Mechanism: Setuid and Setgid" }
+      ],
+      "telemetry": ["execve() of getcap", "recursive getxattr() for security.capability"],
+      "detections": [{ "source": "Sigma", "rule": "Capabilities enumeration via getcap (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 45
+    },
+    {
+      "id": "usermod-group",
+      "command": "usermod",
+      "description": "Modifying user group membership — privilege escalation / account manipulation",
+      "techniques": [{ "id": "T1098", "name": "Account Manipulation" }],
+      "telemetry": ["execve() of usermod", "writes to /etc/group,/etc/passwd — auditd file watch"],
+      "detections": [{ "source": "Sigma", "rule": "User account/group modification (proc_creation_lnx)", "confidence": "medium" }],
+      "noise": 60
     }
   ]
 }
