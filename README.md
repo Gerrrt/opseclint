@@ -101,6 +101,17 @@ tradecraft that exceeds an agreed noise budget.
 - run: opseclint playbooks/ --ci --threshold 75
 ```
 
+### Example playbooks
+
+The [`examples/`](examples/) directory has illustrative (benign-to-run)
+playbooks to try it against:
+
+```bash
+opseclint examples/recon.sh           # post-compromise recon
+opseclint examples/persistence.sh     # accounts, cron, systemd, ld.so.preload, ...
+opseclint examples/defense-evasion.sh # SELinux/firewall/auditd off, log & history wiping
+```
+
 ## Detectability score
 
 A 0–100 estimate of how strongly an action surfaces in defensive telemetry
