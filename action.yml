@@ -1,0 +1,90 @@
+name: "opseclint detection-coverage"
+description: "Analyze shell/command playbooks: map actions to ATT&CK techniques, host telemetry, and the detections that would fire."
+author: "Garrett Allen (@Gerrrt)"
+
+branding:
+  icon: "shield"
+  color: "red"
+
+inputs:
+  path:
+    description: "File or directory to analyze."
+    required: true
+  platform:
+    description: "Target platform: linux-auditd | windows-sysmon | macos-es."
+    required: false
+    default: "linux-auditd"
+  version:
+    description: "opseclint release to use (a tag like v0.1.0, or 'latest')."
+    required: false
+    default: "latest"
+  sarif-file:
+    description: "If set, also write SARIF here (e.g. opseclint.sarif) for a code-scanning upload step."
+    required: false
+    default: ""
+  fail-threshold:
+    description: "If set (0-100), fail the job when the loudest action's detectability is >= this value."
+    required: false
+    default: ""
+  args:
+    description: "Extra raw arguments passed through to opseclint."
+    required: false
+    default: ""
+
+outputs:
+  sarif-file:
+    description: "Path to the SARIF file, when sarif-file was requested."
+    value: ${{ steps.run.outputs.sarif-file }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: run
+      shell: bash
+      env:
+        IN_PATH: ${{ inputs.path }}
+        IN_PLATFORM: ${{ inputs.platform }}
+        IN_VERSION: ${{ inputs.version }}
+        IN_SARIF: ${{ inputs.sarif-file }}
+        IN_THRESHOLD: ${{ inputs.fail-threshold }}
+        IN_ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        repo="Gerrrt/opseclint"
+
+        ver="$IN_VERSION"
+        if [ "$ver" = "latest" ]; then
+          ver=$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" \
+            | grep -oE '"tag_name":[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
+        fi
+        if [ -z "$ver" ]; then
+          echo "::error::could not resolve an opseclint release version"
+          exit 1
+        fi
+
+        asset="opseclint-${ver}-x86_64-unknown-linux-gnu.tar.gz"
+        echo "::group::Download opseclint ${ver}"
+        curl -fsSL "https://github.com/${repo}/releases/download/${ver}/${asset}" -o /tmp/opseclint.tgz
+        tar xzf /tmp/opseclint.tgz -C /tmp
+        bin="/tmp/opseclint-${ver}-x86_64-unknown-linux-gnu/opseclint"
+        chmod +x "$bin"
+        echo "::endgroup::"
+
+        # Optional: emit SARIF for a code-scanning upload step.
+        if [ -n "$IN_SARIF" ]; then
+          "$bin" "$IN_PATH" --platform "$IN_PLATFORM" --sarif > "$IN_SARIF"
+          echo "sarif-file=$IN_SARIF" >> "$GITHUB_OUTPUT"
+          echo "Wrote SARIF to $IN_SARIF"
+        fi
+
+        # Human report, plus the optional CI gate (its exit code fails the job).
+        set -- "$IN_PATH" --platform "$IN_PLATFORM" --no-color
+        if [ -n "$IN_ARGS" ]; then
+          # Intentionally word-split extra args.
+          # shellcheck disable=SC2086
+          set -- "$@" $IN_ARGS
+        fi
+        if [ -n "$IN_THRESHOLD" ]; then
+          set -- "$@" --ci --threshold "$IN_THRESHOLD"
+        fi
+        "$bin" "$@"

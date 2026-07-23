@@ -97,6 +97,27 @@ technique and a `security-severity` derived from the detectability score) and is
 anchored to the line of the analyzed file. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 for a job that runs opseclint and uploads the results.
 
+### Use as a GitHub Action
+
+opseclint ships a composite action ([`action.yml`](action.yml)) that downloads
+a released binary and analyzes a path in CI (Linux runners):
+
+```yaml
+- uses: Gerrrt/opseclint@v0.1.0
+  with:
+    path: examples/
+    platform: linux-auditd     # or windows-sysmon | macos-es
+    fail-threshold: "75"       # optional: fail the job on a loud action
+    sarif-file: opseclint.sarif # optional: emit SARIF...
+
+- uses: github/codeql-action/upload-sarif@v3   # ...then upload it
+  with:
+    sarif_file: opseclint.sarif
+```
+
+Inputs: `path` (required), `platform`, `version` (default `latest`),
+`sarif-file`, `fail-threshold`, and `args` for anything else.
+
 ### CI gating
 
 `--ci` makes opseclint a gate: it exits non-zero when the loudest modeled action
