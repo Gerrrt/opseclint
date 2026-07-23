@@ -1,0 +1,42 @@
+name: Coverage request
+description: Add a new detection, or fix a false positive / false negative
+labels: ["detection-logic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this to request coverage for a command/technique opseclint misses,
+        or to flag a finding that fires when it shouldn't.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - linux-auditd
+        - windows-sysmon
+        - macos-es
+    validations:
+      required: true
+  - type: input
+    id: technique
+    attributes:
+      label: ATT&CK technique
+      placeholder: "e.g. T1003.001 — OS Credential Dumping: LSASS Memory"
+  - type: textarea
+    id: action
+    attributes:
+      label: Command / behavior
+      description: The action a defender would observe (and, if known, the telemetry it emits).
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Missing coverage (false negative)
+        - Spurious finding (false positive)
+        - Wrong technique / telemetry / score
+    validations:
+      required: true
