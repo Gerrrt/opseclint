@@ -63,3 +63,34 @@ jobs:
         with:
           sarif_file: opseclint.sarif
           category: opseclint
+
+  sigma-enrich:
+    name: sigma live enrichment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clone the SigmaHQ ruleset
+        run: git clone --depth 1 https://github.com/SigmaHQ/sigma.git sigma-rules
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Enrich examples with real SigmaHQ rules
+        run: |
+          set -o pipefail
+          out=$(./target/release/opseclint examples/recon.sh --sigma sigma-rules/rules --no-color 2>&1)
+          echo "$out"
+          n=$(printf '%s\n' "$out" | grep -oE 'enriched [0-9]+ finding' | grep -oE '[0-9]+' | head -1)
+          n=${n:-0}
+          echo "findings enriched with real Sigma rules: $n"
+          if [ "$n" -lt 1 ]; then
+            echo "::error::no findings were enriched from the live SigmaHQ ruleset"
+            exit 1
+          fi
