@@ -123,16 +123,6 @@ pub enum Outcome {
     Indeterminate,
 }
 
-impl Outcome {
-    pub fn label(self) -> &'static str {
-        match self {
-            Outcome::Fires => "FIRES",
-            Outcome::NoFire => "NO-FIRE",
-            Outcome::Indeterminate => "INDETERMINATE",
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Verdict {
     pub outcome: Outcome,

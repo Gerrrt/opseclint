@@ -4,99 +4,141 @@
 use std::fmt::Write as _;
 
 use crate::model::{Report, Severity};
+use crate::theme::{self, Painter};
 
-const RESET: &str = "\x1b[0m";
-const DIM: &str = "\x1b[2m";
-const BOLD: &str = "\x1b[1m";
+const WIDTH: usize = 60;
+const INDENT: &str = "                "; // 16 spaces, aligns sub-lines
 
-/// Render the report for a terminal. `color` toggles ANSI escapes.
+fn plural(n: usize) -> &'static str {
+    if n == 1 { "" } else { "s" }
+}
+
+/// Render the report for a terminal in the Tokyo Night palette. `color` toggles
+/// ANSI escapes.
 pub fn render_human(report: &Report, color: bool) -> String {
-    let c = |code: &'static str| if color { code } else { "" };
+    let p = Painter::new(color);
     let mut out = String::new();
 
     let _ = writeln!(
         out,
-        "{}opseclint{} — detection-coverage report ({})",
-        c(BOLD),
-        c(RESET),
-        report.platform
+        "{}{}",
+        p.bold(theme::BLUE, "opseclint"),
+        p.paint(
+            theme::COMMENT,
+            &format!(" · detection-coverage · {}", report.platform)
+        )
     );
-    let _ = writeln!(
-        out,
-        "{}{} line(s) analyzed, {} finding(s){}",
-        c(DIM),
-        report.lines_analyzed,
-        report.findings.len(),
-        c(RESET)
-    );
-    let _ = writeln!(out);
 
     if report.findings.is_empty() {
         let _ = writeln!(
             out,
-            "  No modeled actions matched. (Absence of a finding is not proof of stealth —",
+            "{}",
+            p.paint(
+                theme::COMMENT,
+                &format!(
+                    "{} line{} · 0 findings",
+                    report.lines_analyzed,
+                    plural(report.lines_analyzed)
+                )
+            )
         );
         let _ = writeln!(
             out,
-            "  it only means nothing in the seed knowledge base matched this input.)",
+            "\n  {}",
+            p.paint(
+                theme::FG_DIM,
+                "No modeled actions matched — which is not proof of stealth, only that"
+            )
+        );
+        let _ = writeln!(
+            out,
+            "  {}",
+            p.paint(
+                theme::FG_DIM,
+                "nothing in the knowledge base matched this input."
+            )
         );
         return out;
-    }
-
-    for f in &report.findings {
-        let sev = f.severity;
-        let _ = writeln!(
-            out,
-            "  {}L{:<4}{} {}[{} {}]{}  {}",
-            c(DIM),
-            f.line,
-            c(RESET),
-            c(sev.color()),
-            sev.label(),
-            f.noise,
-            c(RESET),
-            f.description,
-        );
-        for t in &f.techniques {
-            let _ = writeln!(
-                out,
-                "        {}technique{}  {} {}",
-                c(DIM),
-                c(RESET),
-                t.id,
-                t.name
-            );
-        }
-        for tel in &f.telemetry {
-            let _ = writeln!(out, "        {}telemetry{}  {}", c(DIM), c(RESET), tel);
-        }
-        for d in &f.detections {
-            let _ = writeln!(
-                out,
-                "        {}detection{}  {}: {} ({} confidence)",
-                c(DIM),
-                c(RESET),
-                d.source,
-                d.rule,
-                d.confidence,
-            );
-        }
-        let _ = writeln!(out);
     }
 
     let sev = report.max_severity();
     let _ = writeln!(
         out,
-        "{}summary{}  loudest action: {}{} ({}){}",
-        c(BOLD),
-        c(RESET),
-        c(sev.color()),
-        sev.label(),
-        report.max_noise,
-        c(RESET),
+        "{}{}",
+        p.paint(
+            theme::COMMENT,
+            &format!(
+                "{} line{} · {} finding{} · loudest ",
+                report.lines_analyzed,
+                plural(report.lines_analyzed),
+                report.findings.len(),
+                plural(report.findings.len())
+            )
+        ),
+        p.paint(
+            sev.color(),
+            &format!("● {} ({})", sev.label(), report.max_noise)
+        )
+    );
+    let _ = writeln!(out, "{}", p.rule(WIDTH));
+
+    for f in &report.findings {
+        let s = f.severity;
+        let _ = writeln!(
+            out,
+            " {}  {}  {}",
+            p.paint(s.color(), &format!("● {:<8} {:>2}", s.label(), f.noise)),
+            p.paint(theme::COMMENT, &format!("L{}", f.line)),
+            p.paint(theme::FG, &f.description),
+        );
+
+        // Build sub-lines, then draw the tree (├ for all but the last, └ last).
+        let mut subs: Vec<String> = Vec::new();
+        if !f.techniques.is_empty() {
+            let techs = f
+                .techniques
+                .iter()
+                .map(|t| {
+                    format!(
+                        "{} {}",
+                        p.paint(theme::PURPLE, &t.id),
+                        p.paint(theme::FG_DIM, &t.name)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(&p.paint(theme::COMMENT, " · "));
+            subs.push(techs);
+        }
+        for tel in &f.telemetry {
+            subs.push(p.paint(theme::COMMENT, &format!("◈ {tel}")));
+        }
+        for d in &f.detections {
+            subs.push(format!(
+                "{} {}",
+                p.paint(theme::CYAN, &format!("◆ {}: {}", d.source, d.rule)),
+                p.paint(theme::COMMENT, &format!("({})", d.confidence))
+            ));
+        }
+
+        let last = subs.len().saturating_sub(1);
+        for (i, sub) in subs.iter().enumerate() {
+            let glyph = if i == last { "└" } else { "├" };
+            let _ = writeln!(out, "{INDENT}{} {sub}", p.paint(theme::COMMENT, glyph));
+        }
+    }
+
+    let _ = writeln!(out, "{}", p.rule(WIDTH));
+    let _ = writeln!(
+        out,
+        " {}  {}",
+        p.bold(theme::FG, "summary"),
+        p.paint(
+            sev.color(),
+            &format!("● {} ({})", sev.label(), report.max_noise)
+        )
     );
     if !report.note.is_empty() {
-        let _ = writeln!(out, "\n{}{}{}", c(DIM), report.note, c(RESET));
+        let _ = writeln!(out, "\n{}", p.paint(theme::COMMENT, &report.note));
     }
     out
 }

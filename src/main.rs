@@ -16,6 +16,7 @@ mod report;
 mod sarif;
 mod sigma;
 mod sigma_eval;
+mod theme;
 
 use std::io::{IsTerminal, Read};
 use std::process::ExitCode;
@@ -109,14 +110,16 @@ fn run_check_rule(cli: &Cli, rule_path: &str, input: &str) -> ExitCode {
     };
 
     let color = !cli.no_color && std::io::stdout().is_terminal();
-    let paint = |code: &'static str| if color { code } else { "" };
+    let p = theme::Painter::new(color);
     println!(
-        "{}sigma rule check{}: {} ({})",
-        paint("\x1b[1m"),
-        paint("\x1b[0m"),
-        rule.title,
-        rule.id
+        "{}{}",
+        p.bold(theme::BLUE, "opseclint"),
+        p.paint(
+            theme::COMMENT,
+            &format!(" · rule check · {} ({})", rule.title, rule.id)
+        )
     );
+    println!("{}", p.rule(60));
 
     for (idx, line) in input.lines().enumerate() {
         let trimmed = line.trim();
@@ -125,36 +128,25 @@ fn run_check_rule(cli: &Cli, rule_path: &str, input: &str) -> ExitCode {
         }
         for cmd in parser::parse_line(line) {
             let v = sigma_eval::evaluate(&rule, &cmd, cli.platform);
-            let (col, extra) = match v.outcome {
-                sigma_eval::Outcome::Fires => ("\x1b[31m", String::new()),
-                sigma_eval::Outcome::Indeterminate => {
-                    let why = if v.missing_fields.is_empty() {
-                        String::new()
-                    } else {
-                        format!("  (needs {})", v.missing_fields.join(", "))
-                    };
-                    ("\x1b[33m", why)
-                }
-                sigma_eval::Outcome::NoFire => ("\x1b[2m", String::new()),
+            let (glyph, col, label) = match v.outcome {
+                sigma_eval::Outcome::Fires => ("✓", theme::GREEN, "FIRES        "),
+                sigma_eval::Outcome::NoFire => ("·", theme::COMMENT, "NO-FIRE      "),
+                sigma_eval::Outcome::Indeterminate => ("?", theme::YELLOW, "INDETERMINATE"),
             };
             println!(
-                "  {}L{:<4}{} {}{:<14}{} {}{}{}",
-                paint("\x1b[2m"),
-                idx + 1,
-                paint("\x1b[0m"),
-                paint("\x1b[2m"),
-                cmd.program,
-                paint("\x1b[0m"),
-                paint(col),
-                v.outcome.label(),
-                paint("\x1b[0m"),
+                " {} {}  {}  {}",
+                p.paint(col, glyph),
+                p.paint(col, label),
+                p.paint(theme::COMMENT, &format!("L{}", idx + 1)),
+                p.paint(theme::FG, &cmd.program),
             );
-            if !extra.is_empty() {
+            if v.outcome == sigma_eval::Outcome::Indeterminate && !v.missing_fields.is_empty() {
                 println!(
-                    "        {}{}{}",
-                    paint("\x1b[2m"),
-                    extra.trim_start(),
-                    paint("\x1b[0m")
+                    "        {}",
+                    p.paint(
+                        theme::COMMENT,
+                        &format!("needs {}", v.missing_fields.join(", "))
+                    )
                 );
             }
         }

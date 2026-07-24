@@ -80,13 +80,13 @@ impl Severity {
         }
     }
 
-    /// ANSI color code for terminal rendering.
+    /// Tokyo Night ANSI color code for terminal rendering.
     pub fn color(self) -> &'static str {
         match self {
-            Severity::Low => "\x1b[36m",        // cyan
-            Severity::Medium => "\x1b[33m",     // yellow
-            Severity::High => "\x1b[38;5;208m", // orange
-            Severity::Critical => "\x1b[31m",   // red
+            Severity::Low => crate::theme::CYAN,
+            Severity::Medium => crate::theme::YELLOW,
+            Severity::High => crate::theme::ORANGE,
+            Severity::Critical => crate::theme::RED,
         }
     }
 }
