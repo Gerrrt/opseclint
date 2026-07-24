@@ -103,6 +103,10 @@ pub struct Finding {
     pub detections: Vec<Detection>,
     pub noise: u8,
     pub severity: Severity,
+    /// The command this finding was matched from, kept for rule-logic
+    /// evaluation (coverage gaps). Not serialized.
+    #[serde(skip)]
+    pub matched_command: Option<crate::parser::Command>,
 }
 
 /// The full report for an analyzed input.

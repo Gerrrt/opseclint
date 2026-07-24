@@ -211,6 +211,11 @@ fn parse_search(v: &Value) -> Option<Search> {
 /// callers rather than mis-evaluated).
 pub fn parse_rule(yaml: &str) -> Option<DetectionRule> {
     let doc: Value = serde_yaml::from_str(yaml).ok()?;
+    parse_rule_value(&doc)
+}
+
+/// Parse an already-deserialized Sigma rule document into a [`DetectionRule`].
+pub fn parse_rule_value(doc: &Value) -> Option<DetectionRule> {
     let det = doc.get("detection")?.as_mapping()?;
 
     let mut searches = HashMap::new();
