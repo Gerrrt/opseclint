@@ -163,6 +163,7 @@ opseclint script.sh --min 50        # only show findings >= detectability 50
 opseclint script.sh --json          # machine-readable output
 opseclint script.sh --sarif         # SARIF 2.1.0 (GitHub code scanning)
 opseclint script.sh --sigma ./sigma # enrich with a real SigmaHQ checkout
+opseclint script.sh --check-rule r.yml    # does this Sigma rule fire on each line?
 opseclint script.sh --ci --threshold 70   # exit 1 if loudest action >= 70
 ```
 
@@ -200,6 +201,26 @@ The parsed index is cached to disk (fingerprinted by the ruleset directory), so
 repeat runs against a large checkout skip re-parsing and note `[cached]` on a
 hit. Override the location with `OPSECLINT_CACHE_DIR`; `--no-sigma-cache`
 bypasses it.
+
+### Evaluate a single rule (`--check-rule`)
+
+Beyond technique-tag matching, opseclint can evaluate a command against a Sigma
+rule's actual `detection:`/`condition:` logic and report, per command, whether it
+**FIRES**, **NO-FIRE**s, or is **INDETERMINATE** — the last meaning the rule keys
+on a field a static analyzer can't synthesize (e.g. `ParentImage`, a hash), so
+opseclint honestly abstains rather than guess.
+
+```console
+$ opseclint script.sh --check-rule docker_socket.yml
+sigma rule check: Docker Socket Access Via Curl Or Wget (85f46916-…)
+  L1   curl   FIRES
+  L2   wget   NO-FIRE
+  L7   curl   INDETERMINATE
+         (needs ParentImage)
+```
+
+This is the foundation for `--coverage-gaps` (which actions have *no* firing rule)
+— see the [design doc](docs/design/rule-logic-evaluator.md).
 
 ### GitHub code scanning
 
@@ -280,8 +301,8 @@ opseclint examples/macos-postex.sh    --platform macos-es        # keychain, Gat
 - [x] Real SigmaHQ enrichment with an on-disk cache
 - [x] SARIF output → GitHub code scanning
 - [x] Distribution — crates.io, prebuilt binaries, a GitHub Action, and a GHCR image
-- [ ] [Sigma rule-logic evaluator](docs/design/rule-logic-evaluator.md) — `FIRES` / `NO-FIRE` / `INDETERMINATE`
-- [ ] `--coverage-gaps` — actions whose techniques have rules but where none fire
+- [x] [Sigma rule-logic evaluator](docs/design/rule-logic-evaluator.md) — three-valued `FIRES` / `NO-FIRE` / `INDETERMINATE`, via `--check-rule`
+- [ ] `--coverage-gaps` — wire the evaluator into `--sigma` and flag actions where no rule fires
 - [ ] Deepen each KB and add EDR-specific telemetry mappings
 
 See the [open issues][issues-url] for the full list.

@@ -14,6 +14,7 @@ mod parser;
 mod report;
 mod sarif;
 mod sigma;
+mod sigma_eval;
 
 use std::io::{IsTerminal, Read};
 use std::process::ExitCode;
@@ -68,6 +69,11 @@ struct Cli {
     /// Disable the on-disk Sigma index cache (always re-parse the ruleset).
     #[arg(long)]
     no_sigma_cache: bool,
+
+    /// Evaluate the input against a single Sigma rule's detection logic and
+    /// print, per command, whether it FIRES / NO-FIRE / INDETERMINATE.
+    #[arg(long, value_name = "RULE.yml")]
+    check_rule: Option<String>,
 }
 
 fn read_input(cli: &Cli) -> std::io::Result<String> {
@@ -80,6 +86,75 @@ fn read_input(cli: &Cli) -> std::io::Result<String> {
     let mut buf = String::new();
     std::io::stdin().read_to_string(&mut buf)?;
     Ok(buf)
+}
+
+/// Evaluate every command in `input` against a single Sigma rule file.
+fn run_check_rule(cli: &Cli, rule_path: &str, input: &str) -> ExitCode {
+    let yaml = match std::fs::read_to_string(rule_path) {
+        Ok(y) => y,
+        Err(e) => {
+            eprintln!("opseclint: could not read rule '{rule_path}': {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let Some(rule) = sigma_eval::parse_rule(&yaml) else {
+        eprintln!("opseclint: could not parse a Sigma detection from '{rule_path}'");
+        return ExitCode::from(2);
+    };
+
+    let color = !cli.no_color && std::io::stdout().is_terminal();
+    let paint = |code: &'static str| if color { code } else { "" };
+    println!(
+        "{}sigma rule check{}: {} ({})",
+        paint("\x1b[1m"),
+        paint("\x1b[0m"),
+        rule.title,
+        rule.id
+    );
+
+    for (idx, line) in input.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        for cmd in parser::parse_line(line) {
+            let v = sigma_eval::evaluate(&rule, &cmd, cli.platform);
+            let (col, extra) = match v.outcome {
+                sigma_eval::Outcome::Fires => ("\x1b[31m", String::new()),
+                sigma_eval::Outcome::Indeterminate => {
+                    let why = if v.missing_fields.is_empty() {
+                        String::new()
+                    } else {
+                        format!("  (needs {})", v.missing_fields.join(", "))
+                    };
+                    ("\x1b[33m", why)
+                }
+                sigma_eval::Outcome::NoFire => ("\x1b[2m", String::new()),
+            };
+            println!(
+                "  {}L{:<4}{} {}{:<14}{} {}{}{}",
+                paint("\x1b[2m"),
+                idx + 1,
+                paint("\x1b[0m"),
+                paint("\x1b[2m"),
+                cmd.program,
+                paint("\x1b[0m"),
+                paint(col),
+                v.outcome.label(),
+                paint("\x1b[0m"),
+            );
+            if !extra.is_empty() {
+                println!(
+                    "        {}{}{}",
+                    paint("\x1b[2m"),
+                    extra.trim_start(),
+                    paint("\x1b[0m")
+                );
+            }
+        }
+    }
+
+    ExitCode::SUCCESS
 }
 
 fn main() -> ExitCode {
@@ -100,6 +175,11 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+
+    // --check-rule is a distinct mode: evaluate detection logic, not coverage.
+    if let Some(rule_path) = &cli.check_rule {
+        return run_check_rule(&cli, rule_path, &input);
+    }
 
     let mut report = analyzer::analyze(&input, &kb);
     if cli.min > 0 {
