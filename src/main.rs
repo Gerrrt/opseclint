@@ -8,6 +8,7 @@
 //! detection engineers reason about coverage. It does not recommend evasions.
 
 mod analyzer;
+mod coverage;
 mod kb;
 mod model;
 mod parser;
@@ -74,6 +75,11 @@ struct Cli {
     /// print, per command, whether it FIRES / NO-FIRE / INDETERMINATE.
     #[arg(long, value_name = "RULE.yml")]
     check_rule: Option<String>,
+
+    /// Report coverage gaps: actions whose techniques have rules in --sigma but
+    /// where none actually fire. Requires --sigma.
+    #[arg(long, requires = "sigma")]
+    coverage_gaps: bool,
 }
 
 fn read_input(cli: &Cli) -> std::io::Result<String> {
@@ -184,6 +190,32 @@ fn main() -> ExitCode {
     let mut report = analyzer::analyze(&input, &kb);
     if cli.min > 0 {
         report.findings.retain(|f| f.noise >= cli.min);
+    }
+
+    // --coverage-gaps is its own output mode (evaluate rule logic, not enrich).
+    if cli.coverage_gaps {
+        let dir = cli.sigma.as_deref().expect("clap requires --sigma");
+        let index = match sigma::DetectionIndex::load_dir(
+            std::path::Path::new(dir),
+            cli.platform.sigma_product(),
+        ) {
+            Ok(i) => i,
+            Err(e) => {
+                eprintln!("opseclint: could not read sigma dir '{dir}': {e}");
+                return ExitCode::from(2);
+            }
+        };
+        let results = coverage::analyze(&report, &index, cli.platform);
+        let color = !cli.no_color && std::io::stdout().is_terminal();
+        print!(
+            "{}",
+            coverage::render(&results, &report.platform, index.rules_indexed, color)
+        );
+        // In --ci mode, fail the run when blind spots exist.
+        if cli.ci && coverage::gap_count(&results) > 0 {
+            return ExitCode::from(1);
+        }
+        return ExitCode::SUCCESS;
     }
 
     if let Some(dir) = &cli.sigma {

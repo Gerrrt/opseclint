@@ -164,6 +164,7 @@ opseclint script.sh --json          # machine-readable output
 opseclint script.sh --sarif         # SARIF 2.1.0 (GitHub code scanning)
 opseclint script.sh --sigma ./sigma # enrich with a real SigmaHQ checkout
 opseclint script.sh --check-rule r.yml    # does this Sigma rule fire on each line?
+opseclint script.sh --sigma ./sigma --coverage-gaps   # which actions no rule catches
 opseclint script.sh --ci --threshold 70   # exit 1 if loudest action >= 70
 ```
 
@@ -219,8 +220,30 @@ sigma rule check: Docker Socket Access Via Curl Or Wget (85f46916-…)
          (needs ParentImage)
 ```
 
-This is the foundation for `--coverage-gaps` (which actions have *no* firing rule)
-— see the [design doc](docs/design/rule-logic-evaluator.md).
+### Coverage gaps (`--coverage-gaps`)
+
+The headline purple-team feature: given a playbook and a real `--sigma` ruleset,
+report the **blind spots** — actions whose ATT&CK techniques *have* rules, yet
+none of those rules actually fire on the specific command.
+
+```console
+$ opseclint examples/recon.sh --sigma sigma/rules --coverage-gaps
+opseclint — coverage gaps (linux-auditd) vs 251 rule(s)
+
+  ✓ COVERED  L23  Bash /dev/tcp reverse shell   [T1059.004, T1071]
+        fires: Suspicious Reverse Shell Command Line
+  ⚠ GAP      L18  Socket / network connection discovery   [T1049]
+        rule(s) exist for its technique(s), but none fire
+  ? INDET    L6   System owner / current user discovery   [T1033]
+        needs host fields to confirm
+
+summary  1 gap(s), 10 covered, 3 indeterminate, 1 no-rules
+```
+
+`GAP` = a rule for that technique exists but wouldn't trigger on this action;
+`INDET` = a matching rule needs a field a static analyzer can't see; `NO-RULES`
+= the ruleset has nothing for that technique. With `--ci`, the run exits
+non-zero when any gap is found.
 
 ### GitHub code scanning
 
@@ -302,7 +325,7 @@ opseclint examples/macos-postex.sh    --platform macos-es        # keychain, Gat
 - [x] SARIF output → GitHub code scanning
 - [x] Distribution — crates.io, prebuilt binaries, a GitHub Action, and a GHCR image
 - [x] [Sigma rule-logic evaluator](docs/design/rule-logic-evaluator.md) — three-valued `FIRES` / `NO-FIRE` / `INDETERMINATE`, via `--check-rule`
-- [ ] `--coverage-gaps` — wire the evaluator into `--sigma` and flag actions where no rule fires
+- [x] `--coverage-gaps` — flag actions whose techniques have rules but where none fire
 - [ ] Deepen each KB and add EDR-specific telemetry mappings
 
 See the [open issues][issues-url] for the full list.

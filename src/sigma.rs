@@ -316,6 +316,111 @@ pub fn enrich(report: &mut Report, index: &SigmaIndex) -> usize {
     enriched
 }
 
+// --- detection-logic index (for coverage-gap analysis) --------------------
+
+/// A Sigma rule with parsed detection logic, indexed by technique.
+pub struct DetectionRuleRef {
+    pub id: String,
+    pub title: String,
+    pub rule: crate::sigma_eval::DetectionRule,
+}
+
+/// technique-id -> Sigma rules whose detection logic can be evaluated.
+#[derive(Default)]
+pub struct DetectionIndex {
+    by_technique: HashMap<String, Vec<DetectionRuleRef>>,
+    pub files_scanned: usize,
+    pub rules_indexed: usize,
+}
+
+impl DetectionIndex {
+    /// All rules matching any of the given technique ids, deduped by rule id.
+    pub fn rules_for(&self, technique_ids: &[String]) -> Vec<&DetectionRuleRef> {
+        let mut out: Vec<&DetectionRuleRef> = Vec::new();
+        for tid in technique_ids {
+            if let Some(rules) = self.by_technique.get(tid) {
+                for r in rules {
+                    if !out.iter().any(|e| e.id == r.id) {
+                        out.push(r);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Recursively load Sigma rules under `dir`, parsing each one's detection
+    /// logic and indexing it by ATT&CK technique. Platform-filtered like
+    /// [`SigmaIndex::load_dir`].
+    pub fn load_dir(dir: &Path, product: &str) -> std::io::Result<DetectionIndex> {
+        let mut index = DetectionIndex::default();
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(path) = stack.pop() {
+            for entry in std::fs::read_dir(&path)? {
+                let entry = entry?;
+                let p = entry.path();
+                if p.is_dir() {
+                    stack.push(p);
+                    continue;
+                }
+                if !is_yaml(&p) {
+                    continue;
+                }
+                index.files_scanned += 1;
+                if let Ok(content) = std::fs::read_to_string(&p) {
+                    index.ingest(&content, product);
+                }
+            }
+        }
+        Ok(index)
+    }
+
+    fn ingest(&mut self, content: &str, product: &str) {
+        use serde::Deserialize;
+        for doc in serde_yaml::Deserializer::from_str(content) {
+            let Ok(value) = serde_yaml::Value::deserialize(doc) else {
+                continue;
+            };
+            // Platform filter.
+            if let Some(p) = value
+                .get("logsource")
+                .and_then(|ls| ls.get("product"))
+                .and_then(|p| p.as_str())
+                && !p.eq_ignore_ascii_case(product)
+            {
+                continue;
+            }
+            let Some(rule) = crate::sigma_eval::parse_rule_value(&value) else {
+                continue;
+            };
+            let techniques: Vec<String> = value
+                .get("tags")
+                .and_then(|t| t.as_sequence())
+                .map(|seq| {
+                    seq.iter()
+                        .filter_map(|t| t.as_str())
+                        .filter_map(technique_from_tag)
+                        .collect()
+                })
+                .unwrap_or_default();
+            if techniques.is_empty() {
+                continue;
+            }
+            self.rules_indexed += 1;
+            for tech in techniques {
+                self.by_technique
+                    .entry(tech)
+                    .or_default()
+                    .push(DetectionRuleRef {
+                        id: rule.id.clone(),
+                        title: rule.title.clone(),
+                        rule: rule.clone(),
+                    });
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

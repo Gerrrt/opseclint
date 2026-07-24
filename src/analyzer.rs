@@ -7,7 +7,11 @@ use crate::kb;
 use crate::model::{Finding, KnowledgeBase, Report, Severity};
 use crate::parser::{self, parse_line};
 
-fn finding_from_entry(entry: &crate::model::KbEntry, line: usize) -> Finding {
+fn finding_from_entry(
+    entry: &crate::model::KbEntry,
+    line: usize,
+    matched_command: Option<crate::parser::Command>,
+) -> Finding {
     Finding {
         line,
         source: "opseclint".to_string(),
@@ -18,6 +22,7 @@ fn finding_from_entry(entry: &crate::model::KbEntry, line: usize) -> Finding {
         detections: entry.detections.clone(),
         noise: entry.noise,
         severity: Severity::from_noise(entry.noise),
+        matched_command,
     }
 }
 
@@ -45,15 +50,22 @@ pub fn analyze(input: &str, kb: &KnowledgeBase) -> Report {
         let mut seen: HashSet<&str> = HashSet::new();
 
         for entry in &kb.entries {
-            let matched = if entry.command.is_some() {
-                commands
+            // The specific command that matched (for command entries), else the
+            // line's first command (for raw/line matches) — kept so coverage
+            // analysis can evaluate rule logic against it.
+            let (matched, matched_command) = if entry.command.is_some() {
+                let cmd = commands
                     .iter()
-                    .any(|cmd| kb::command_entry_matches(entry, cmd))
+                    .find(|cmd| kb::command_entry_matches(entry, cmd))
+                    .cloned();
+                (cmd.is_some(), cmd)
+            } else if kb::raw_entry_matches(entry, trimmed) {
+                (true, commands.first().cloned())
             } else {
-                kb::raw_entry_matches(entry, trimmed)
+                (false, None)
             };
             if matched && seen.insert(entry.id.as_str()) {
-                findings.push(finding_from_entry(entry, unit.line));
+                findings.push(finding_from_entry(entry, unit.line, matched_command));
             }
         }
     }
