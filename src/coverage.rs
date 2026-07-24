@@ -81,35 +81,38 @@ pub fn gap_count(results: &[CoverageResult]) -> usize {
         .count()
 }
 
-/// Render a human-readable coverage report.
+/// Render a human-readable coverage report in the Tokyo Night palette.
 pub fn render(
     results: &[CoverageResult],
     platform: &str,
     rules_indexed: usize,
     color: bool,
 ) -> String {
+    use crate::theme::{self, Painter};
     use std::fmt::Write as _;
-    let c = |code: &'static str| if color { code } else { "" };
+
+    let p = Painter::new(color);
     let mut out = String::new();
 
     let _ = writeln!(
         out,
-        "{}opseclint{} — coverage gaps ({}) vs {} rule(s)\n",
-        c("\x1b[1m"),
-        c("\x1b[0m"),
-        platform,
-        rules_indexed
+        "{}{}",
+        p.bold(theme::BLUE, "opseclint"),
+        p.paint(
+            theme::COMMENT,
+            &format!(" · coverage gaps · {platform} vs {rules_indexed} rules")
+        )
     );
+    let _ = writeln!(out, "{}", p.rule(60));
 
     let (mut covered, mut gaps, mut indet, mut norules) = (0, 0, 0, 0);
     for r in results {
-        let techs = r.techniques.join(", ");
         let (glyph, col, label, note) = match r.coverage {
             Coverage::Gap => {
                 gaps += 1;
                 (
                     "⚠",
-                    "\x1b[31m",
+                    theme::RED,
                     "GAP     ",
                     "rule(s) exist for its technique(s), but none fire".to_string(),
                 )
@@ -118,7 +121,7 @@ pub fn render(
                 covered += 1;
                 (
                     "✓",
-                    "\x1b[32m",
+                    theme::GREEN,
                     "COVERED ",
                     format!("fires: {}", r.firing.join("; ")),
                 )
@@ -127,7 +130,7 @@ pub fn render(
                 indet += 1;
                 (
                     "?",
-                    "\x1b[33m",
+                    theme::YELLOW,
                     "INDET   ",
                     "needs host fields to confirm".to_string(),
                 )
@@ -136,43 +139,43 @@ pub fn render(
                 norules += 1;
                 (
                     "·",
-                    "\x1b[2m",
+                    theme::COMMENT,
                     "NO-RULES",
                     "no rule in this ruleset covers its technique(s)".to_string(),
                 )
             }
         };
+        let techs = r
+            .techniques
+            .iter()
+            .map(|t| p.paint(theme::PURPLE, t))
+            .collect::<Vec<_>>()
+            .join(&p.paint(theme::COMMENT, ", "));
         let _ = writeln!(
             out,
-            "  {}{} {}{} {}L{:<4}{} {} {}[{}]{}\n        {}{}{}",
-            c(col),
-            glyph,
-            label,
-            c("\x1b[0m"),
-            c("\x1b[2m"),
-            r.line,
-            c("\x1b[0m"),
-            r.description,
-            c("\x1b[2m"),
+            " {} {}  {}  {} {}{}{}",
+            p.paint(col, glyph),
+            p.paint(col, label),
+            p.paint(theme::COMMENT, &format!("L{}", r.line)),
+            p.paint(theme::FG, &r.description),
+            p.paint(theme::COMMENT, "["),
             techs,
-            c("\x1b[0m"),
-            c("\x1b[2m"),
-            note,
-            c("\x1b[0m"),
+            p.paint(theme::COMMENT, "]"),
         );
+        let _ = writeln!(out, "        {}", p.paint(theme::COMMENT, &note));
     }
 
+    let _ = writeln!(out, "{}", p.rule(60));
+    let gap_col = if gaps > 0 { theme::RED } else { theme::GREEN };
     let _ = writeln!(
         out,
-        "\n{}summary{}  {}{} gap(s){}, {} covered, {} indeterminate, {} no-rules",
-        c("\x1b[1m"),
-        c("\x1b[0m"),
-        c(if gaps > 0 { "\x1b[31m" } else { "\x1b[32m" }),
-        gaps,
-        c("\x1b[0m"),
-        covered,
-        indet,
-        norules,
+        " {}  {} {}",
+        p.bold(theme::FG, "summary"),
+        p.paint(gap_col, &format!("⚠ {gaps} gap")),
+        p.paint(
+            theme::COMMENT,
+            &format!("· {covered} covered · {indet} indeterminate · {norules} no-rules")
+        ),
     );
     out
 }
